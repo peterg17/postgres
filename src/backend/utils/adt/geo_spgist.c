@@ -79,6 +79,8 @@
 #include "utils/builtins.h"
 #include "utils/geo_decls.h"
 
+#define LOOSENESS 0.5
+
 /*
  * Comparator for qsort
  *
@@ -117,7 +119,7 @@ typedef struct
 
 /*
  * Calculate the quadrant
- *
+ * 
  * The quadrant is 8 bit unsigned integer with 4 least bits in use.
  * This function accepts BOXes as input.  They are not casted to
  * RangeBoxes, yet.  All 4 bits are set by comparing a corner of the box.
@@ -127,6 +129,17 @@ static uint8
 getQuadrant(BOX *centroid, BOX *inBox)
 {
 	uint8		quadrant = 0;
+
+	// elog(DEBUG1, "centroid low x: %d\n", centroid->low.x);
+	// elog(DEBUG1, "centroid low y: %d\n", centroid->low.y);
+	ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_OBJECT),
+					 errmsg("data type %s has no default operator class for access method \"%s\""),
+					 errhint("You must specify an operator class for the range type or define a default operator class for the subtype.")));
+	// double correctedLowX = centroid->low.x * loosenessFactor;
+	// double correctedHighX = centroid->high.x * loosenessFactor;
+	// double correctedLowY = centroid->low.y * loosenessFactor;
+	// double correctedHighY = centroid->high.y * loosenessFactor;
 
 	if (inBox->low.x > centroid->low.x)
 		quadrant |= 0x8;
@@ -145,7 +158,7 @@ getQuadrant(BOX *centroid, BOX *inBox)
 
 /*
  * Get RangeBox using BOX
- *
+ * 
  * We are turning the BOX to our structures to emphasize their function
  * of representing points in 4D space.  It also is more convenient to
  * access the values with this structure.
@@ -399,6 +412,9 @@ spg_box_quad_choose(PG_FUNCTION_ARGS)
 	/* nodeN will be set by core, when allTheSame. */
 	if (!in->allTheSame)
 		out->result.matchNode.nodeN = getQuadrant(centroid, box);
+
+	// can set addNode to the existing inner tuple if box
+	// is too big for any quadrant even given the looseness property
 
 	PG_RETURN_VOID();
 }
