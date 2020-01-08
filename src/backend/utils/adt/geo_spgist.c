@@ -130,16 +130,8 @@ getQuadrant(BOX *centroid, BOX *inBox)
 {
 	uint8		quadrant = 0;
 
-	// elog(DEBUG1, "centroid low x: %d\n", centroid->low.x);
-	// elog(DEBUG1, "centroid low y: %d\n", centroid->low.y);
-	ereport(ERROR,
-					(errcode(ERRCODE_UNDEFINED_OBJECT),
-					 errmsg("data type %s has no default operator class for access method \"%s\""),
-					 errhint("You must specify an operator class for the range type or define a default operator class for the subtype.")));
-	// double correctedLowX = centroid->low.x * loosenessFactor;
-	// double correctedHighX = centroid->high.x * loosenessFactor;
-	// double correctedLowY = centroid->low.y * loosenessFactor;
-	// double correctedHighY = centroid->high.y * loosenessFactor;
+	elog(LOG, "BOX (minx, miny) = (%d, %d)\n", centroid->low.x, centroid->low.y);
+	elog(LOG, "BOX (maxx, maxy) = (%d, %d)\n", centroid->high.x, centroid->high.y);
 
 	if (inBox->low.x > centroid->low.x)
 		quadrant |= 0x8;
@@ -152,6 +144,8 @@ getQuadrant(BOX *centroid, BOX *inBox)
 
 	if (inBox->high.y > centroid->high.y)
 		quadrant |= 0x1;
+
+	elog(LOG, "Quadrant bitvector value is: %d\n", quadrant);
 
 	return quadrant;
 }
@@ -401,6 +395,8 @@ spg_box_quad_config(PG_FUNCTION_ARGS)
 Datum
 spg_box_quad_choose(PG_FUNCTION_ARGS)
 {
+	elog(NOTICE, "in box quad choose function!!");
+
 	spgChooseIn *in = (spgChooseIn *) PG_GETARG_POINTER(0);
 	spgChooseOut *out = (spgChooseOut *) PG_GETARG_POINTER(1);
 	BOX		   *centroid = DatumGetBoxP(in->prefixDatum),
