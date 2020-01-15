@@ -1,0 +1,1 @@
+SELECT spgist_stat('box_quad_idx');

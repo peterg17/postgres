@@ -7,7 +7,6 @@ CREATE TABLE quad(
 
 
 INSERT INTO quad(id, b)
-VALUES
-(1, box(point(1,1), point(3,3))),
-(2, box(point(2,2), point(4,4))),
-(3, box(point(3,3), point(5,5)));
+SELECT
+id, box(point(1000*random(),1000*random()), point(1000*random(),1000*random())) 
+FROM generate_series(1, 1000) id;

@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
- *
- * geo_spgist.c
- *	  SP-GiST implementation of 4-dimensional quad tree over boxes
+ * loose_quadtree.c (CURRENTLY JUST A COPY OF geo_spgist.c)
+ * 
+ * SP-GiST implementation of 4-dimensional quad tree over boxes
  *
  * This module provides SP-GiST implementation for boxes using quad tree
  * analogy in 4-dimensional space.  SP-GiST doesn't allow indexing of
@@ -80,6 +80,21 @@
 #include "utils/geo_decls.h"
 
 #define LOOSENESS 0.5
+#ifdef PG_MODULE_MAGIC
+PG_MODULE_MAGIC;
+#endif
+
+Datum spg_loose_quad_config(PG_FUNCTION_ARGS);
+Datum spg_loose_quad_choose(PG_FUNCTION_ARGS);
+Datum spg_loose_quad_picksplit(PG_FUNCTION_ARGS);
+Datum spg_loose_quad_inner_consistent(PG_FUNCTION_ARGS);
+Datum spg_loose_quad_leaf_consistent(PG_FUNCTION_ARGS);
+
+PG_FUNCTION_INFO_V1(spg_loose_quad_config);
+PG_FUNCTION_INFO_V1(spg_loose_quad_choose);
+PG_FUNCTION_INFO_V1(spg_loose_quad_picksplit);
+PG_FUNCTION_INFO_V1(spg_loose_quad_inner_consistent);
+PG_FUNCTION_INFO_V1(spg_loose_quad_leaf_consistent);
 
 /*
  * Comparator for qsort
@@ -374,10 +389,10 @@ overAbove4D(RectBox *rect_box, RangeBox *query)
 }
 
 /*
- * SP-GiST config function
+ * SP-GiST loose quadtree config function
  */
 Datum
-spg_box_quad_config(PG_FUNCTION_ARGS)
+spg_loose_quad_config(PG_FUNCTION_ARGS)
 {
 	spgConfigOut *cfg = (spgConfigOut *) PG_GETARG_POINTER(1);
 
@@ -390,10 +405,10 @@ spg_box_quad_config(PG_FUNCTION_ARGS)
 }
 
 /*
- * SP-GiST choose function
+ * SP-GiST loose quadtree choose function
  */
 Datum
-spg_box_quad_choose(PG_FUNCTION_ARGS)
+spg_loose_quad_choose(PG_FUNCTION_ARGS)
 {
 	spgChooseIn *in = (spgChooseIn *) PG_GETARG_POINTER(0);
 	spgChooseOut *out = (spgChooseOut *) PG_GETARG_POINTER(1);
@@ -412,13 +427,14 @@ spg_box_quad_choose(PG_FUNCTION_ARGS)
 }
 
 /*
- * SP-GiST pick-split function
+ * SP-GiST loose quadtree pick-split function
  *
+ * [TODO]: change this based on logic needed for loose quadtree
  * It splits a list of boxes into quadrants by choosing a central 4D
  * point as the median of the coordinates of the boxes.
  */
 Datum
-spg_box_quad_picksplit(PG_FUNCTION_ARGS)
+spg_loose_quad_picksplit(PG_FUNCTION_ARGS)
 {
 	elog(LOG, "in box quadtree picksplit function!!");
 	spgPickSplitIn *in = (spgPickSplitIn *) PG_GETARG_POINTER(0);
@@ -528,10 +544,10 @@ spg_box_quad_get_scankey_bbox(ScanKey sk, bool *recheck)
 }
 
 /*
- * SP-GiST inner consistent function
+ * SP-GiST loose quadtree inner consistent function
  */
 Datum
-spg_box_quad_inner_consistent(PG_FUNCTION_ARGS)
+spg_loose_quad_inner_consistent(PG_FUNCTION_ARGS)
 {
 	spgInnerConsistentIn *in = (spgInnerConsistentIn *) PG_GETARG_POINTER(0);
 	spgInnerConsistentOut *out = (spgInnerConsistentOut *) PG_GETARG_POINTER(1);
@@ -675,10 +691,10 @@ spg_box_quad_inner_consistent(PG_FUNCTION_ARGS)
 }
 
 /*
- * SP-GiST inner consistent function
+ * SP-GiST loose quadtree inner consistent function
  */
 Datum
-spg_box_quad_leaf_consistent(PG_FUNCTION_ARGS)
+spg_loose_quad_leaf_consistent(PG_FUNCTION_ARGS)
 {
 	spgLeafConsistentIn *in = (spgLeafConsistentIn *) PG_GETARG_POINTER(0);
 	spgLeafConsistentOut *out = (spgLeafConsistentOut *) PG_GETARG_POINTER(1);

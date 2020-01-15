@@ -1,0 +1,5 @@
+# loose quadtree index extension
+comment = 'support for a spgist loose quadtree index over boxes'
+default_version = '1.0'
+module_pathname = '$libdir/_loosequad'
+relocatable = true
