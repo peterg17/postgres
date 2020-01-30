@@ -73,6 +73,7 @@
 
 #include "postgres.h"
 
+#include "math.h"
 #include "access/spgist.h"
 #include "access/stratnum.h"
 #include "catalog/pg_type.h"
@@ -116,6 +117,13 @@ compareDoubles(const void *a, const void *b)
 
 typedef struct
 {
+	double      width;
+	double      height;
+} Dimensions;
+
+
+typedef struct
+{
 	double		low;
 	double		high;
 } Range;
@@ -135,33 +143,51 @@ typedef struct
 /*
  * Calculate the quadrant
  * 
- * The quadrant is 8 bit unsigned integer with 4 least bits in use.
- * This function accepts BOXes as input.  They are not casted to
- * RangeBoxes, yet.  All 4 bits are set by comparing a corner of the box.
- * This makes 16 quadrants in total.
+ * The quadrant is an int set by where the new box's centroid is 
+ * in relation to the centroid of the overall box. I don't think we have
+ * to check the bounds of objects b/c we can't change the level of the nodes...
+ * 
+ * Quadrant labeling: 
+ * 
+ *				|
+ *		  0		|    1
+ *				|	    
+ *    ----------+----------
+ *	  			|
+ *	  	  2		|    3
+ *	  			|
+ *  
  */
-static uint8
+static int
 getQuadrant(BOX *centroid, BOX *inBox)
 {
-	uint8		quadrant = 0;
+	int quadrant = 0;
 
-	elog(LOG, "BOX (minx, miny) = (%f, %f)\n", centroid->low.x, centroid->low.y);
-	elog(LOG, "BOX (maxx, maxy) = (%f, %f)\n", centroid->high.x, centroid->high.y);
+	elog(LOG, "[getQuadrant] BOX (minx, miny) = (%f, %f)  -->  (maxx, maxy) = (%f, %f)\n", inBox->low.x, inBox->low.y, inBox->high.x, inBox->high.y);
+	elog(LOG, "[getQuadrant] CENTROID (minx, miny) = (%f, %f)  -->  (maxx, maxy) = (%f, %f)\n", centroid->low.x, centroid->low.y, centroid->high.x, centroid->high.y);
 
-	if (inBox->low.x > centroid->low.x)
-		quadrant |= 0x8;
+	double centroidX = centroid->low.x + (centroid->high.x - centroid->low.x) / 2.0;
+	double centroidY = centroid->low.y + (centroid->high.y - centroid->low.y) / 2.0;
+	double newCentroidX = inBox->low.x + (inBox->high.x - inBox->low.x) / 2.0;
+	double newCentroidY = inBox->low.y + (inBox->high.y - inBox->low.y) / 2.0;
 
-	if (inBox->high.x > centroid->high.x)
-		quadrant |= 0x4;
-
-	if (inBox->low.y > centroid->low.y)
-		quadrant |= 0x2;
-
-	if (inBox->high.y > centroid->high.y)
-		quadrant |= 0x1;
-
-	elog(LOG, "Quadrant bitvector value is: %d\n", quadrant);
-
+	if (newCentroidY >= centroidY) {
+		// in either quadrant 0 or 1
+		if (newCentroidX >= centroidX) {
+			quadrant = 1;
+		} else {
+			quadrant = 0;
+		}
+	} else {
+		// in either quadrant 2 or 3
+		if (newCentroidX >= centroidX) {
+			quadrant = 3;
+		} else {
+			quadrant = 2;
+		}
+	}
+	
+	elog(LOG, "Quadrant is: (%d)\n", quadrant);
 	return quadrant;
 }
 
@@ -397,7 +423,7 @@ spg_loose_quad_config(PG_FUNCTION_ARGS)
 	spgConfigOut *cfg = (spgConfigOut *) PG_GETARG_POINTER(1);
 
 	cfg->prefixType = BOXOID;
-	cfg->labelType = VOIDOID;	/* We don't need node labels. */
+	cfg->labelType = VOIDOID;	/* We don't use a label */
 	cfg->canReturnData = true;
 	cfg->longValuesOK = false;
 
@@ -410,17 +436,71 @@ spg_loose_quad_config(PG_FUNCTION_ARGS)
 Datum
 spg_loose_quad_choose(PG_FUNCTION_ARGS)
 {
+	elog(LOG, "in box quadtree choose function!!");
 	spgChooseIn *in = (spgChooseIn *) PG_GETARG_POINTER(0);
 	spgChooseOut *out = (spgChooseOut *) PG_GETARG_POINTER(1);
 	BOX		   *centroid = DatumGetBoxP(in->prefixDatum),
 			   *box = DatumGetBoxP(in->leafDatum);
+	double currBoxLength, newElementRadius;
+	int boxNewLevel, levelDifference;
 
 	out->resultType = spgMatchNode;
 	out->result.matchNode.restDatum = BoxPGetDatum(box);
 
 	/* nodeN will be set by core, when allTheSame. */
-	if (!in->allTheSame)
-		out->result.matchNode.nodeN = getQuadrant(centroid, box);
+	if (!in->allTheSame) {
+		// this code performs the level choosing equation
+		int centroidWidth = centroid->high.x - centroid->low.x;
+		int centroidHeight = centroid->high.y - centroid->low.y;
+		currBoxLength =  (centroidWidth >= centroidHeight) ? centroidWidth : centroidHeight;
+		int boxWidth = box->high.x - box->low.x;
+		int boxHeight = box->high.y - box->low.y;
+		newElementRadius =  (boxWidth >= boxHeight) ? boxWidth : boxHeight;
+		newElementRadius = newElementRadius / 2.0;
+		int levelCandidate = floor(log2(currBoxLength / newElementRadius)) - 1;
+		boxNewLevel = (levelCandidate >= 0) ? levelCandidate : 0;
+		int candidateLevelDiff = boxNewLevel - in->level;
+		levelDifference = (candidateLevelDiff >= 0) ? candidateLevelDiff : 0;
+		elog(LOG, "[choose] current level is: (%d) , inserting box at level: (%d) with level diff of (%d)\n", in->level, boxNewLevel, levelDifference);
+		out->result.matchNode.levelAdd = levelDifference;
+
+		// the following code chooses the quadrant at the new level
+		// we have to simulate traversing the tree, choosing quadrant at each level
+		// and upate the centroid accordingly 
+		// out->result.matchNode.nodeN = getQuadrant(centroid, box);
+
+		BOX		*currentBox = palloc(sizeof(BOX));
+		int		currentQuadrant = 0;
+		currentBox->high.x = centroid->high.x;
+		currentBox->high.y = centroid->high.y;
+		currentBox->low.x = centroid->low.x;
+		currentBox->low.y = centroid->low.y;
+		for (int i=0; i < levelDifference; i++) {
+			elog(LOG, "[choose] current centroid (minx, miny) = (%f, %f)  -->  (maxx, maxy) = (%f, %f)\n", currentBox->low.x, currentBox->low.y, currentBox->high.x, currentBox->high.y);
+			currentQuadrant = getQuadrant(currentBox, box);
+			int middleX = currentBox->low.x + (currentBox->high.x - currentBox->low.x) / 2.0;
+			int middleY = currentBox->low.y + (currentBox->high.y - currentBox->low.y) / 2.0;
+			if (currentQuadrant == 0) {
+				currentBox->low.y = middleY;
+				currentBox->high.x = middleX;
+			} else if (currentQuadrant == 1) {
+				currentBox->low.x = middleX;
+				currentBox->low.y = middleY;
+			} else if (currentQuadrant == 2) {
+				currentBox->high.x = middleX;
+				currentBox->high.y = middleY;
+			} else if (currentQuadrant == 3) {
+				currentBox->low.x = middleX;
+				currentBox->high.y = middleY;
+			} else {
+				elog(LOG, "[choose] INVALID QUADRANT SELECTED");
+			}
+		
+		}
+		out->result.matchNode.nodeN = currentQuadrant;
+	}
+
+
 
 
 	PG_RETURN_VOID();
@@ -429,9 +509,14 @@ spg_loose_quad_choose(PG_FUNCTION_ARGS)
 /*
  * SP-GiST loose quadtree pick-split function
  *
- * [TODO]: change this based on logic needed for loose quadtree
- * It splits a list of boxes into quadrants by choosing a central 4D
- * point as the median of the coordinates of the boxes.
+ * The pick-split function is called when a leaf page runs out of space
+ * and needs to create new leaf pages. These represent the quadrants in our 
+ * loose quadtree. The method we choose for determining new quadrants is:
+ * 
+ * - Take the minimum bounding square around the space of all the boxes
+ * - calculate which quadrant a box is in by comparing the centroid of the box
+ *   to the quadrants, check bounds too?
+ * 
  */
 Datum
 spg_loose_quad_picksplit(PG_FUNCTION_ARGS)
@@ -442,6 +527,8 @@ spg_loose_quad_picksplit(PG_FUNCTION_ARGS)
 	BOX		   *centroid;
 	int			median,
 				i;
+
+	double     minXY, maxXY;
 	double	   *lowXs = palloc(sizeof(double) * in->nTuples);
 	double	   *highXs = palloc(sizeof(double) * in->nTuples);
 	double	   *lowYs = palloc(sizeof(double) * in->nTuples);
@@ -467,21 +554,24 @@ spg_loose_quad_picksplit(PG_FUNCTION_ARGS)
 
 	centroid = palloc(sizeof(BOX));
 
-	centroid->low.x = lowXs[median];
-	centroid->high.x = highXs[median];
-	centroid->low.y = lowYs[median];
-	centroid->high.y = highYs[median];
+	minXY = (lowXs[0] <= lowYs[0]) ? lowXs[0] : lowYs[0];
+	maxXY = (highXs[in->nTuples] >= highYs[in->nTuples]) ? highXs[in->nTuples-1] : highYs[in->nTuples-1];
+	centroid->low.x = minXY;
+	centroid->high.x = maxXY;
+	centroid->low.y = minXY;
+	centroid->high.y = maxXY;
 
 	/* Fill the output */
 	out->hasPrefix = true;
 	out->prefixDatum = BoxPGetDatum(centroid);
 
-	out->nNodes = 16;
+	out->nNodes = 4;
 	out->nodeLabels = NULL;		/* We don't need node labels. */
 
 	out->mapTuplesToNodes = palloc(sizeof(int) * in->nTuples);
 	out->leafTupleDatums = palloc(sizeof(Datum) * in->nTuples);
 
+	elog(LOG, "in picksplit, current level is: %d\n", in->level);
 	/*
 	 * Assign ranges to corresponding nodes according to quadrants relative to
 	 * the "centroid" range

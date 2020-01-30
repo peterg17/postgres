@@ -1,5 +1,8 @@
 {
     "files.associations": {
-        "genam.h": "c"
+        "genam.h": "c",
+        "spgist.h": "c",
+        "postgres.h": "c",
+        "geo_decls.h": "c"
     }
 }

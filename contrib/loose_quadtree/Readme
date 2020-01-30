@@ -1,0 +1,15 @@
+loose_quadtree is an spgist index extension for supporting loose quadtrees, which are a data structure
+that is similar to a quadtree over boxes, but 
+
+
+
+How to install the extension
+In shell:
+
+$ cd $PGSQLSRC/contrib
+$ make
+$ sudo make install
+
+Then in psql shell:
+
+# CREATE EXTENSION loose_quadtree
