@@ -136,8 +136,8 @@ typedef struct
 
 typedef struct
 {
-	RangeBox	range_box_x;
-	RangeBox	range_box_y;
+	Range		range_box_x;
+	Range		range_box_y;
 } RectBox;
 
 /*
@@ -218,25 +218,19 @@ getRangeBox(BOX *box)
  * In the beginning, we don't have any restrictions.  We have to
  * initialize the struct to cover the whole 4D space.
  */
-static RectBox *
-initRectBox(void)
+static RangeBox *
+initRangeBox(void)
 {
-	RectBox    *rect_box = (RectBox *) palloc(sizeof(RectBox));
+	RangeBox    *range_box = (RangeBox *) palloc(sizeof(RangeBox));
 	double		infinity = get_float8_infinity();
 
-	rect_box->range_box_x.left.low = -infinity;
-	rect_box->range_box_x.left.high = infinity;
+	range_box->left.low = -infinity; 
+	range_box->right.low = -infinity;
 
-	rect_box->range_box_x.right.low = -infinity;
-	rect_box->range_box_x.right.high = infinity;
+	range_box->left.high = infinity;
+	range_box->right.high = infinity;
 
-	rect_box->range_box_y.left.low = -infinity;
-	rect_box->range_box_y.left.high = infinity;
-
-	rect_box->range_box_y.right.low = -infinity;
-	rect_box->range_box_y.right.high = infinity;
-
-	return rect_box;
+	return range_box;
 }
 
 /*
@@ -246,50 +240,75 @@ initRectBox(void)
  * boxes.  When we are traversing the tree, we must calculate RectBox,
  * using centroid and quadrant.
  */
-static RectBox *
-nextRectBox(RectBox *rect_box, RangeBox *centroid, uint8 quadrant)
+static RangeBox *
+nextRangeBox(RangeBox *range_box, RangeBox *centroid, uint8 quadrant)
 {
-	RectBox    *next_rect_box = (RectBox *) palloc(sizeof(RectBox));
+	/*
+	currentQuadrant = getQuadrant(currentBox, box);
+	int middleX = currentBox->low.x + (currentBox->high.x - currentBox->low.x) / 2.0;
+	int middleY = currentBox->low.y + (currentBox->high.y - currentBox->low.y) / 2.0;
+	if (currentQuadrant == 0) {
+		currentBox->low.y = middleY;
+		currentBox->high.x = middleX;
+	} else if (currentQuadrant == 1) {
+		currentBox->low.x = middleX;
+		currentBox->low.y = middleY;
+	} else if (currentQuadrant == 2) {
+		currentBox->high.x = middleX;
+		currentBox->high.y = middleY;
+	} else if (currentQuadrant == 3) {
+		currentBox->low.x = middleX;
+		currentBox->high.y = middleY;
+	} else {
+		elog(LOG, "[choose] INVALID QUADRANT SELECTED");
+			}
+	*/
 
-	memcpy(next_rect_box, rect_box, sizeof(RectBox));
+	RangeBox    *next_range_box = (RangeBox *) palloc(sizeof(RangeBox));
+	memcpy(next_range_box, range_box, sizeof(RangeBox));
+	int middleX = centroid->left.low + (centroid->left.high - centroid->left.low) / 2.0;
+	int middleY = centroid->right.low + (centroid->right.high - centroid->right.low) / 2.0;
 
-	if (quadrant & 0x8)
-		next_rect_box->range_box_x.left.low = centroid->left.low;
-	else
-		next_rect_box->range_box_x.left.high = centroid->left.low;
-
-	if (quadrant & 0x4)
-		next_rect_box->range_box_x.right.low = centroid->left.high;
-	else
-		next_rect_box->range_box_x.right.high = centroid->left.high;
-
-	if (quadrant & 0x2)
-		next_rect_box->range_box_y.left.low = centroid->right.low;
-	else
-		next_rect_box->range_box_y.left.high = centroid->right.low;
-
-	if (quadrant & 0x1)
-		next_rect_box->range_box_y.right.low = centroid->right.high;
-	else
-		next_rect_box->range_box_y.right.high = centroid->right.high;
-
-	return next_rect_box;
+	if (quadrant == 0) {
+		next_range_box->right.low = middleY;
+		next_range_box->left.low = middleX;
+	} else if (quadrant == 1) {
+		next_range_box->left.low = middleX;
+		next_range_box->right.low = middleY;
+	} else if (quadrant == 2) {
+		next_range_box->left.high = middleX;
+		next_range_box->right.high = middleY;
+	} else if (quadrant == 3) {
+		next_range_box->left.low = middleX;
+		next_range_box->right.high = middleY;
+	} else {
+		elog(LOG, "[inner consistent] INVALID QUADRANT SELECTED");
+	}
+		
+	return next_range_box;
 }
 
 /* Can any range from range_box overlap with this argument? */
 static bool
-overlap2D(RangeBox *range_box, Range *query)
+overlap2DX(RangeBox *range_box, Range *query)
 {
 	return FPge(range_box->right.high, query->low) &&
+		FPle(range_box->right.low, query->high);
+}
+
+static bool
+overlap2DY(RangeBox *range_box, Range *query)
+{
+	return FPge(range_box->left.high, query->low) && 
 		FPle(range_box->left.low, query->high);
 }
 
 /* Can any rectangle from rect_box overlap with this argument? */
 static bool
-overlap4D(RectBox *rect_box, RangeBox *query)
+overlap4D(RangeBox *range_box, RangeBox *query)
 {
-	return overlap2D(&rect_box->range_box_x, &query->left) &&
-		overlap2D(&rect_box->range_box_y, &query->right);
+	return overlap2DX(range_box, &query->left) && 
+		overlap2DY(range_box, &query->right);
 }
 
 /* Can any range from range_box contain this argument? */
@@ -302,10 +321,10 @@ contain2D(RangeBox *range_box, Range *query)
 
 /* Can any rectangle from rect_box contain this argument? */
 static bool
-contain4D(RectBox *rect_box, RangeBox *query)
+contain4D(RangeBox *range_box, RangeBox *query)
 {
-	return contain2D(&rect_box->range_box_x, &query->left) &&
-		contain2D(&rect_box->range_box_y, &query->right);
+	return contain2D(range_box, &query->left) &&
+		contain2D(range_box, &query->right);
 }
 
 /* Can any range from range_box be contained by this argument? */
@@ -320,10 +339,10 @@ contained2D(RangeBox *range_box, Range *query)
 
 /* Can any rectangle from rect_box be contained by this argument? */
 static bool
-contained4D(RectBox *rect_box, RangeBox *query)
+contained4D(RangeBox *range_box, RangeBox *query)
 {
-	return contained2D(&rect_box->range_box_x, &query->left) &&
-		contained2D(&rect_box->range_box_y, &query->right);
+	return contained2D(range_box, &query->left) &&
+		contained2D(range_box, &query->right);
 }
 
 /* Can any range from range_box to be lower than this argument? */
@@ -360,58 +379,58 @@ overHigher2D(RangeBox *range_box, Range *query)
 
 /* Can any rectangle from rect_box be left of this argument? */
 static bool
-left4D(RectBox *rect_box, RangeBox *query)
+left4D(RangeBox *range_box, RangeBox *query)
 {
-	return lower2D(&rect_box->range_box_x, &query->left);
+	return lower2D(range_box, &query->left);
 }
 
 /* Can any rectangle from rect_box does not extend the right of this argument? */
 static bool
-overLeft4D(RectBox *rect_box, RangeBox *query)
+overLeft4D(RangeBox *range_box, RangeBox *query)
 {
-	return overLower2D(&rect_box->range_box_x, &query->left);
+	return overLower2D(range_box, &query->left);
 }
 
 /* Can any rectangle from rect_box be right of this argument? */
 static bool
-right4D(RectBox *rect_box, RangeBox *query)
+right4D(RangeBox *range_box, RangeBox *query)
 {
-	return higher2D(&rect_box->range_box_x, &query->left);
+	return higher2D(range_box, &query->left);
 }
 
 /* Can any rectangle from rect_box does not extend the left of this argument? */
 static bool
-overRight4D(RectBox *rect_box, RangeBox *query)
+overRight4D(RangeBox *range_box, RangeBox *query)
 {
-	return overHigher2D(&rect_box->range_box_x, &query->left);
+	return overHigher2D(range_box, &query->left);
 }
 
 /* Can any rectangle from rect_box be below of this argument? */
 static bool
-below4D(RectBox *rect_box, RangeBox *query)
+below4D(RangeBox *range_box, RangeBox *query)
 {
-	return lower2D(&rect_box->range_box_y, &query->right);
+	return lower2D(range_box, &query->right);
 }
 
 /* Can any rectangle from rect_box does not extend above this argument? */
 static bool
-overBelow4D(RectBox *rect_box, RangeBox *query)
+overBelow4D(RangeBox *range_box, RangeBox *query)
 {
-	return overLower2D(&rect_box->range_box_y, &query->right);
+	return overLower2D(range_box, &query->right);
 }
 
 /* Can any rectangle from rect_box be above of this argument? */
 static bool
-above4D(RectBox *rect_box, RangeBox *query)
+above4D(RangeBox *range_box, RangeBox *query)
 {
-	return higher2D(&rect_box->range_box_y, &query->right);
+	return higher2D(range_box, &query->right);
 }
 
 /* Can any rectangle from rect_box does not extend below of this argument? */
 static bool
-overAbove4D(RectBox *rect_box, RangeBox *query)
+overAbove4D(RangeBox *range_box, RangeBox *query)
 {
-	return overHigher2D(&rect_box->range_box_y, &query->right);
+	return overHigher2D(range_box, &query->right);
 }
 
 /*
@@ -643,7 +662,7 @@ spg_loose_quad_inner_consistent(PG_FUNCTION_ARGS)
 	spgInnerConsistentOut *out = (spgInnerConsistentOut *) PG_GETARG_POINTER(1);
 	int			i;
 	MemoryContext old_ctx;
-	RectBox    *rect_box;
+	RangeBox    *range_box;
 	uint8		quadrant;
 	RangeBox   *centroid,
 			  **queries;
@@ -664,9 +683,9 @@ spg_loose_quad_inner_consistent(PG_FUNCTION_ARGS)
 	 * we have just begun to walk the tree.
 	 */
 	if (in->traversalValue)
-		rect_box = in->traversalValue;
+		range_box = in->traversalValue;
 	else
-		rect_box = initRectBox();
+		range_box = initRangeBox();
 
 	/*
 	 * We are casting the prefix and queries to RangeBoxes for ease of the
@@ -695,7 +714,7 @@ spg_loose_quad_inner_consistent(PG_FUNCTION_ARGS)
 
 	for (quadrant = 0; quadrant < in->nNodes; quadrant++)
 	{
-		RectBox    *next_rect_box = nextRectBox(rect_box, centroid, quadrant);
+		RangeBox	*next_range_box = nextRangeBox(range_box, centroid, quadrant);
 		bool		flag = true;
 
 		for (i = 0; i < in->nkeys; i++)
@@ -705,48 +724,48 @@ spg_loose_quad_inner_consistent(PG_FUNCTION_ARGS)
 			switch (strategy)
 			{
 				case RTOverlapStrategyNumber:
-					flag = overlap4D(next_rect_box, queries[i]);
+					flag = overlap4D(next_range_box, queries[i]);
 					break;
 
 				case RTContainsStrategyNumber:
-					flag = contain4D(next_rect_box, queries[i]);
+					flag = contain4D(next_range_box, queries[i]);
 					break;
 
 				case RTSameStrategyNumber:
 				case RTContainedByStrategyNumber:
-					flag = contained4D(next_rect_box, queries[i]);
+					flag = contained4D(next_range_box, queries[i]);
 					break;
 
 				case RTLeftStrategyNumber:
-					flag = left4D(next_rect_box, queries[i]);
+					flag = left4D(next_range_box, queries[i]);
 					break;
 
 				case RTOverLeftStrategyNumber:
-					flag = overLeft4D(next_rect_box, queries[i]);
+					flag = overLeft4D(next_range_box, queries[i]);
 					break;
 
 				case RTRightStrategyNumber:
-					flag = right4D(next_rect_box, queries[i]);
+					flag = right4D(next_range_box, queries[i]);
 					break;
 
 				case RTOverRightStrategyNumber:
-					flag = overRight4D(next_rect_box, queries[i]);
+					flag = overRight4D(next_range_box, queries[i]);
 					break;
 
 				case RTAboveStrategyNumber:
-					flag = above4D(next_rect_box, queries[i]);
+					flag = above4D(next_range_box, queries[i]);
 					break;
 
 				case RTOverAboveStrategyNumber:
-					flag = overAbove4D(next_rect_box, queries[i]);
+					flag = overAbove4D(next_range_box, queries[i]);
 					break;
 
 				case RTBelowStrategyNumber:
-					flag = below4D(next_rect_box, queries[i]);
+					flag = below4D(next_range_box, queries[i]);
 					break;
 
 				case RTOverBelowStrategyNumber:
-					flag = overBelow4D(next_rect_box, queries[i]);
+					flag = overBelow4D(next_range_box, queries[i]);
 					break;
 
 				default:
@@ -760,7 +779,7 @@ spg_loose_quad_inner_consistent(PG_FUNCTION_ARGS)
 
 		if (flag)
 		{
-			out->traversalValues[out->nNodes] = next_rect_box;
+			out->traversalValues[out->nNodes] = next_range_box;
 			out->nodeNumbers[out->nNodes] = quadrant;
 			out->nNodes++;
 		}
@@ -770,7 +789,7 @@ spg_loose_quad_inner_consistent(PG_FUNCTION_ARGS)
 			 * If this node is not selected, we don't need to keep the next
 			 * traversal value in the memory context.
 			 */
-			pfree(next_rect_box);
+			pfree(next_range_box);
 		}
 	}
 

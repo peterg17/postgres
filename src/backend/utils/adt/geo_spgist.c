@@ -130,9 +130,6 @@ getQuadrant(BOX *centroid, BOX *inBox)
 {
 	uint8		quadrant = 0;
 
-	elog(LOG, "BOX (minx, miny) = (%f, %f)\n", centroid->low.x, centroid->low.y);
-	elog(LOG, "BOX (maxx, maxy) = (%f, %f)\n", centroid->high.x, centroid->high.y);
-
 	if (inBox->low.x > centroid->low.x)
 		quadrant |= 0x8;
 
@@ -145,7 +142,6 @@ getQuadrant(BOX *centroid, BOX *inBox)
 	if (inBox->high.y > centroid->high.y)
 		quadrant |= 0x1;
 
-	elog(LOG, "Quadrant bitvector value is: %d\n", quadrant);
 
 	return quadrant;
 }
@@ -420,7 +416,6 @@ spg_box_quad_choose(PG_FUNCTION_ARGS)
 Datum
 spg_box_quad_picksplit(PG_FUNCTION_ARGS)
 {
-	elog(LOG, "in box quadtree picksplit function!!");
 	spgPickSplitIn *in = (spgPickSplitIn *) PG_GETARG_POINTER(0);
 	spgPickSplitOut *out = (spgPickSplitOut *) PG_GETARG_POINTER(1);
 	BOX		   *centroid;

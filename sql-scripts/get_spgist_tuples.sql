@@ -8,4 +8,4 @@
 			prefix box, 
 			node_label int, 
 			leaf_value box
-		) where level = 11;
+		) where level = 3;
