@@ -292,23 +292,23 @@ nextRangeBox(RangeBox *range_box, RangeBox *centroid, uint8 quadrant)
 static bool
 overlap2DX(RangeBox *range_box, Range *query)
 {
-	return FPge(range_box->right.high, query->low) &&
-		FPle(range_box->right.low, query->high);
+	return FPge(range_box->right.low, query->high) ||
+		FPge(query->low, range_box->right.high);
 }
 
 static bool
 overlap2DY(RangeBox *range_box, Range *query)
 {
-	return FPge(range_box->left.high, query->low) && 
-		FPle(range_box->left.low, query->high);
+	return FPge(range_box->left.low, query->high) || 
+		FPge(query->low, range_box->left.high);
 }
 
 /* Can any rectangle from rect_box overlap with this argument? */
 static bool
 overlap4D(RangeBox *range_box, RangeBox *query)
 {
-	return overlap2DX(range_box, &query->left) && 
-		overlap2DY(range_box, &query->right);
+	return !(overlap2DX(range_box, &query->left) || 
+		overlap2DY(range_box, &query->right));
 }
 
 /* Can any range from range_box contain this argument? */
@@ -476,7 +476,7 @@ spg_loose_quad_choose(PG_FUNCTION_ARGS)
 		int boxHeight = box->high.y - box->low.y;
 		newElementRadius =  (boxWidth >= boxHeight) ? boxWidth : boxHeight;
 		newElementRadius = newElementRadius / 2.0;
-		int levelCandidate = floor(log2(currBoxLength / newElementRadius)) - 1;
+		int levelCandidate = floor(log2(currBoxLength / newElementRadius)) - 2;
 		boxNewLevel = (levelCandidate >= 0) ? levelCandidate : 0;
 		int candidateLevelDiff = boxNewLevel - in->level;
 		levelDifference = (candidateLevelDiff >= 0) ? candidateLevelDiff : 0;
