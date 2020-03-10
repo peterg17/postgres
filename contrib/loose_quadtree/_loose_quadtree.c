@@ -80,10 +80,13 @@
 #include "utils/builtins.h"
 #include "utils/geo_decls.h"
 
-#define LOOSENESS 0.5
+#define LOOSENESS 1
 #ifdef PG_MODULE_MAGIC
 PG_MODULE_MAGIC;
 #endif
+
+#define WORLDWIDTH 1000
+#define WORLDHEIGHT 1000
 
 Datum spg_loose_quad_config(PG_FUNCTION_ARGS);
 Datum spg_loose_quad_choose(PG_FUNCTION_ARGS);
@@ -96,6 +99,7 @@ PG_FUNCTION_INFO_V1(spg_loose_quad_choose);
 PG_FUNCTION_INFO_V1(spg_loose_quad_picksplit);
 PG_FUNCTION_INFO_V1(spg_loose_quad_inner_consistent);
 PG_FUNCTION_INFO_V1(spg_loose_quad_leaf_consistent);
+
 
 /*
  * Comparator for qsort
@@ -120,6 +124,12 @@ typedef struct
 	double      width;
 	double      height;
 } Dimensions;
+
+typedef struct 
+{
+	BOX *quadBounds;
+	int quadNode;
+} WorldState;
 
 
 typedef struct
@@ -241,33 +251,14 @@ initRangeBox(void)
  * using centroid and quadrant.
  */
 static RangeBox *
-nextRangeBox(RangeBox *range_box, RangeBox *centroid, uint8 quadrant)
+nextRangeBox(RangeBox *range_box, uint8 quadrant)
 {
-	/*
-	currentQuadrant = getQuadrant(currentBox, box);
-	int middleX = currentBox->low.x + (currentBox->high.x - currentBox->low.x) / 2.0;
-	int middleY = currentBox->low.y + (currentBox->high.y - currentBox->low.y) / 2.0;
-	if (currentQuadrant == 0) {
-		currentBox->low.y = middleY;
-		currentBox->high.x = middleX;
-	} else if (currentQuadrant == 1) {
-		currentBox->low.x = middleX;
-		currentBox->low.y = middleY;
-	} else if (currentQuadrant == 2) {
-		currentBox->high.x = middleX;
-		currentBox->high.y = middleY;
-	} else if (currentQuadrant == 3) {
-		currentBox->low.x = middleX;
-		currentBox->high.y = middleY;
-	} else {
-		elog(LOG, "[choose] INVALID QUADRANT SELECTED");
-			}
-	*/
-
 	RangeBox    *next_range_box = (RangeBox *) palloc(sizeof(RangeBox));
 	memcpy(next_range_box, range_box, sizeof(RangeBox));
-	int middleX = centroid->left.low + (centroid->left.high - centroid->left.low) / 2.0;
-	int middleY = centroid->right.low + (centroid->right.high - centroid->right.low) / 2.0;
+	// int middleX = centroid->left.low + (centroid->left.high - centroid->left.low) / 2.0;
+	// int middleY = centroid->right.low + (centroid->right.high - centroid->right.low) / 2.0;
+	int middleX = range_box->left.low + (range_box->left.high - range_box->left.low) / 2.0;
+	int middleY = range_box->right.low + (range_box->right.high - range_box->right.low) / 2.0;
 
 	if (quadrant == 0) {
 		next_range_box->right.low = middleY;
@@ -441,7 +432,7 @@ spg_loose_quad_config(PG_FUNCTION_ARGS)
 {
 	spgConfigOut *cfg = (spgConfigOut *) PG_GETARG_POINTER(1);
 
-	cfg->prefixType = BOXOID;
+	cfg->prefixType = VOIDOID; // we don't use a prefix
 	cfg->labelType = VOIDOID;	/* We don't use a label */
 	cfg->canReturnData = true;
 	cfg->longValuesOK = false;
@@ -455,47 +446,24 @@ spg_loose_quad_config(PG_FUNCTION_ARGS)
 Datum
 spg_loose_quad_choose(PG_FUNCTION_ARGS)
 {
-	elog(LOG, "in box quadtree choose function!!");
+	// elog(LOG, "in box quadtree choose function!!");
 	spgChooseIn *in = (spgChooseIn *) PG_GETARG_POINTER(0);
 	spgChooseOut *out = (spgChooseOut *) PG_GETARG_POINTER(1);
-	BOX		   *centroid = DatumGetBoxP(in->prefixDatum),
-			   *box = DatumGetBoxP(in->leafDatum);
-	double currBoxLength, newElementRadius;
-	int boxNewLevel, levelDifference;
+	BOX *box = DatumGetBoxP(in->leafDatum);
 
 	out->resultType = spgMatchNode;
 	out->result.matchNode.restDatum = BoxPGetDatum(box);
 
 	/* nodeN will be set by core, when allTheSame. */
 	if (!in->allTheSame) {
-		// this code performs the level choosing equation
-		int centroidWidth = centroid->high.x - centroid->low.x;
-		int centroidHeight = centroid->high.y - centroid->low.y;
-		currBoxLength =  (centroidWidth >= centroidHeight) ? centroidWidth : centroidHeight;
-		int boxWidth = box->high.x - box->low.x;
-		int boxHeight = box->high.y - box->low.y;
-		newElementRadius =  (boxWidth >= boxHeight) ? boxWidth : boxHeight;
-		newElementRadius = newElementRadius / 2.0;
-		int levelCandidate = floor(log2(currBoxLength / newElementRadius)) - 2;
-		boxNewLevel = (levelCandidate >= 0) ? levelCandidate : 0;
-		int candidateLevelDiff = boxNewLevel - in->level;
-		levelDifference = (candidateLevelDiff >= 0) ? candidateLevelDiff : 0;
-		elog(LOG, "[choose] current level is: (%d) , inserting box at level: (%d) with level diff of (%d)\n", in->level, boxNewLevel, levelDifference);
-		out->result.matchNode.levelAdd = levelDifference;
-
-		// the following code chooses the quadrant at the new level
-		// we have to simulate traversing the tree, choosing quadrant at each level
-		// and upate the centroid accordingly 
-		// out->result.matchNode.nodeN = getQuadrant(centroid, box);
-
 		BOX		*currentBox = palloc(sizeof(BOX));
-		int		currentQuadrant = 0;
-		currentBox->high.x = centroid->high.x;
-		currentBox->high.y = centroid->high.y;
-		currentBox->low.x = centroid->low.x;
-		currentBox->low.y = centroid->low.y;
-		for (int i=0; i < levelDifference; i++) {
-			elog(LOG, "[choose] current centroid (minx, miny) = (%f, %f)  -->  (maxx, maxy) = (%f, %f)\n", currentBox->low.x, currentBox->low.y, currentBox->high.x, currentBox->high.y);
+		WorldState *world = palloc(sizeof(WorldState));
+		uint8		currentQuadrant = 0;
+		currentBox->high.x = WORLDWIDTH;
+		currentBox->high.y = WORLDHEIGHT;
+		currentBox->low.x = 0;
+		currentBox->low.y = 0;
+		for (int i=0; i < in->level; i++) {
 			currentQuadrant = getQuadrant(currentBox, box);
 			int middleX = currentBox->low.x + (currentBox->high.x - currentBox->low.x) / 2.0;
 			int middleY = currentBox->low.y + (currentBox->high.y - currentBox->low.y) / 2.0;
@@ -514,16 +482,55 @@ spg_loose_quad_choose(PG_FUNCTION_ARGS)
 			} else {
 				elog(LOG, "[choose] INVALID QUADRANT SELECTED");
 			}
-		
+		}
+		currentQuadrant = getQuadrant(currentBox, box);
+		elog(LOG, "[choose] setting quadrant %d", currentQuadrant);
+		if (currentQuadrant > 3) {
+			elog(ERROR, "[choose] INVALID QUADRANT %d", currentQuadrant);
 		}
 		out->result.matchNode.nodeN = currentQuadrant;
+		// out->result.matchNode.levelAdd = 1;
 	}
-
-
-
 
 	PG_RETURN_VOID();
 }
+
+uint8
+insertDatumQuadrant(BOX *box, int level)
+{
+	BOX		*currentBox = palloc(sizeof(BOX));
+	uint8		currentQuadrant = 0;
+	currentBox->high.x = WORLDWIDTH;
+	currentBox->high.y = WORLDHEIGHT;
+	currentBox->low.x = 0;
+	currentBox->low.y = 0;
+	for (int i=0; i < level; i++) {
+		currentQuadrant = getQuadrant(currentBox, box);
+		int middleX = currentBox->low.x + (currentBox->high.x - currentBox->low.x) / 2.0;
+		int middleY = currentBox->low.y + (currentBox->high.y - currentBox->low.y) / 2.0;
+		if (currentQuadrant == 0) {
+			currentBox->low.y = middleY;
+			currentBox->high.x = middleX;
+		} else if (currentQuadrant == 1) {
+			currentBox->low.x = middleX;
+			currentBox->low.y = middleY;
+		} else if (currentQuadrant == 2) {
+			currentBox->high.x = middleX;
+			currentBox->high.y = middleY;
+		} else if (currentQuadrant == 3) {
+			currentBox->low.x = middleX;
+			currentBox->high.y = middleY;
+		} else {
+			elog(LOG, "[choose] INVALID QUADRANT SELECTED");
+		}
+	}
+	currentQuadrant = getQuadrant(currentBox, box);
+	if (currentQuadrant > 3) {
+		elog(ERROR, "[choose] INVALID QUADRANT %d", currentQuadrant);
+	}
+	return currentQuadrant;
+}
+
 
 /*
  * SP-GiST loose quadtree pick-split function
@@ -532,65 +539,30 @@ spg_loose_quad_choose(PG_FUNCTION_ARGS)
  * and needs to create new leaf pages. These represent the quadrants in our 
  * loose quadtree. The method we choose for determining new quadrants is:
  * 
- * - Take the minimum bounding square around the space of all the boxes
- * - calculate which quadrant a box is in by comparing the centroid of the box
- *   to the quadrants, check bounds too?
+ * Calculate quadtree quadrant cell size by taking WORLDWIDTH / (level+1) because level is 0-indexed
+ * Right now i'm using lastQuadrantChosen to determine where we are coming from, but that might not work too well
  * 
  */
 Datum
 spg_loose_quad_picksplit(PG_FUNCTION_ARGS)
 {
-	elog(LOG, "in box quadtree picksplit function!!");
 	spgPickSplitIn *in = (spgPickSplitIn *) PG_GETARG_POINTER(0);
 	spgPickSplitOut *out = (spgPickSplitOut *) PG_GETARG_POINTER(1);
-	BOX		   *centroid;
+	// BOX		   *centroid;
 	int			median,
 				i;
 
-	double     minXY, maxXY;
-	double	   *lowXs = palloc(sizeof(double) * in->nTuples);
-	double	   *highXs = palloc(sizeof(double) * in->nTuples);
-	double	   *lowYs = palloc(sizeof(double) * in->nTuples);
-	double	   *highYs = palloc(sizeof(double) * in->nTuples);
+	// double quadCellWidth = (1+LOOSENESS) * (WORLDWIDTH / (in->level+1));
 
-	/* Calculate median of all 4D coordinates */
-	for (i = 0; i < in->nTuples; i++)
-	{
-		BOX		   *box = DatumGetBoxP(in->datums[i]);
-
-		lowXs[i] = box->low.x;
-		highXs[i] = box->high.x;
-		lowYs[i] = box->low.y;
-		highYs[i] = box->high.y;
-	}
-
-	qsort(lowXs, in->nTuples, sizeof(double), compareDoubles);
-	qsort(highXs, in->nTuples, sizeof(double), compareDoubles);
-	qsort(lowYs, in->nTuples, sizeof(double), compareDoubles);
-	qsort(highYs, in->nTuples, sizeof(double), compareDoubles);
-
-	median = in->nTuples / 2;
-
-	centroid = palloc(sizeof(BOX));
-
-	minXY = (lowXs[0] <= lowYs[0]) ? lowXs[0] : lowYs[0];
-	maxXY = (highXs[in->nTuples] >= highYs[in->nTuples]) ? highXs[in->nTuples-1] : highYs[in->nTuples-1];
-	centroid->low.x = minXY;
-	centroid->high.x = maxXY;
-	centroid->low.y = minXY;
-	centroid->high.y = maxXY;
-
-	/* Fill the output */
-	out->hasPrefix = true;
-	out->prefixDatum = BoxPGetDatum(centroid);
-
-	out->nNodes = 4;
-	out->nodeLabels = NULL;		/* We don't need node labels. */
+	// elog(LOG, "in box quadtree picksplit function with level %d", in->level);
+	// elog(LOG, "i think the quadrant picksplit is splitting is quad: %d", lastQuadrantChosen);
+	
+	// centroid = palloc(sizeof(BOX));
 
 	out->mapTuplesToNodes = palloc(sizeof(int) * in->nTuples);
 	out->leafTupleDatums = palloc(sizeof(Datum) * in->nTuples);
 
-	elog(LOG, "in picksplit, current level is: %d\n", in->level);
+	// elog(LOG, "in picksplit, current level is: %d\n", in->level);
 	/*
 	 * Assign ranges to corresponding nodes according to quadrants relative to
 	 * the "centroid" range
@@ -598,11 +570,26 @@ spg_loose_quad_picksplit(PG_FUNCTION_ARGS)
 	for (i = 0; i < in->nTuples; i++)
 	{
 		BOX		   *box = DatumGetBoxP(in->datums[i]);
-		uint8		quadrant = getQuadrant(centroid, box);
+		// uint8		quadrant = getQuadrant(centroid, box);
 
 		out->leafTupleDatums[i] = BoxPGetDatum(box);
-		out->mapTuplesToNodes[i] = quadrant;
+		uint8 quadNode = insertDatumQuadrant(box, in->level);
+		elog(LOG, "[picksplit] inserting into node %d", quadNode);
+		if (quadNode > 3) {
+			elog(ERROR, "[picksplit] INCORRECT QUADRANT %d", quadNode);
+		}
+		out->mapTuplesToNodes[i] = quadNode;
 	}
+
+
+	/* Fill the output */
+	out->hasPrefix = false;
+	// out->prefixDatum = BoxPGetDatum(centroid);
+
+	out->nNodes = 4;
+	out->nodeLabels = NULL;		/* We don't need node labels. */
+
+	
 
 	PG_RETURN_VOID();
 }
@@ -691,7 +678,7 @@ spg_loose_quad_inner_consistent(PG_FUNCTION_ARGS)
 	 * We are casting the prefix and queries to RangeBoxes for ease of the
 	 * following operations.
 	 */
-	centroid = getRangeBox(DatumGetBoxP(in->prefixDatum));
+	// centroid = getRangeBox(DatumGetBoxP(in->prefixDatum));
 	queries = (RangeBox **) palloc(in->nkeys * sizeof(RangeBox *));
 	for (i = 0; i < in->nkeys; i++)
 	{
@@ -714,7 +701,7 @@ spg_loose_quad_inner_consistent(PG_FUNCTION_ARGS)
 
 	for (quadrant = 0; quadrant < in->nNodes; quadrant++)
 	{
-		RangeBox	*next_range_box = nextRangeBox(range_box, centroid, quadrant);
+		RangeBox	*next_range_box = nextRangeBox(range_box, quadrant);
 		bool		flag = true;
 
 		for (i = 0; i < in->nkeys; i++)
@@ -909,7 +896,7 @@ spg_bbox_quad_config(PG_FUNCTION_ARGS)
 {
 	spgConfigOut *cfg = (spgConfigOut *) PG_GETARG_POINTER(1);
 
-	cfg->prefixType = BOXOID;	/* A type represented by its bounding box */
+	cfg->prefixType = BOXOID;	/* We don't need a prefix because we partition the space */
 	cfg->labelType = VOIDOID;	/* We don't need node labels. */
 	cfg->leafType = BOXOID;
 	cfg->canReturnData = false;
