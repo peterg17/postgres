@@ -8,5 +8,5 @@ CREATE TABLE quad(
 
 INSERT INTO quad(id, b)
 SELECT
-id, box(point(100*random(),100*random()), point(100*random()+200,100*random()+200)) 
-FROM generate_series(1, 5000) id;
+id, box(point(500*random(),500*random()), point(100*random()+500,100*random()+500)) 
+FROM generate_series(1, 1000) id;

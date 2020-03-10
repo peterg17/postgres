@@ -99,18 +99,39 @@ typedef GISTPageOpaqueData *GISTPageOpaque;
  * secondary-split results with the previously-chosen tuples, and will then
  * recompute the union keys from scratch.  This is a workable though often not
  * optimal approach.
+ * 
+ * MODIFIED DUE TO LOOSE QUADTREE:
+ * WE NOW HAVE 4 SPLITS YOU CAN INSERT INTO
+ * 	
+ * 				  |
+ * 			NW	  |    NE
+ * 		----------|-----------
+ * 			SW	  |    SE
+ *   		      |
+ * 
  */
 typedef struct GIST_SPLITVEC
 {
-	OffsetNumber *spl_left;		/* array of entries that go left */
-	int			spl_nleft;		/* size of this array */
-	Datum		spl_ldatum;		/* Union of keys in spl_left */
-	bool		spl_ldatum_exists;	/* true, if spl_ldatum already exists. */
+	OffsetNumber *spl_nw;		/* array of entries that go NW */
+	int			spl_nnw;		/* size of this array */
+	Datum		spl_nwdatum;		/* Union of keys in spl_nw */
+	bool		spl_nwdatum_exists;	/* true, if spl_nwdatum already exists. */
 
-	OffsetNumber *spl_right;	/* array of entries that go right */
-	int			spl_nright;		/* size of the array */
-	Datum		spl_rdatum;		/* Union of keys in spl_right */
-	bool		spl_rdatum_exists;	/* true, if spl_rdatum already exists. */
+	OffsetNumber *spl_ne;	/* array of entries that go NE */
+	int			spl_nne;		/* size of the array */
+	Datum		spl_nedatum;		/* Union of keys in spl_ne */
+	bool		spl_nedatum_exists;	/* true, if spl_nedatum already exists. */
+
+	OffsetNumber *spl_sw;	/* array of entries that go SW */
+	int			spl_nsw;		/* size of the array */
+	Datum		spl_swdatum;		/* Union of keys in spl_sw */
+	bool		spl_swdatum_exists;	/* true, if spl_swdatum already exists. */
+	
+	OffsetNumber *spl_se;	/* array of entries that go SE */
+	int			spl_nse;		/* size of the array */
+	Datum		spl_sedatum;		/* Union of keys in spl_se */
+	bool		spl_sedatum_exists;	/* true, if spl_sedatum already exists. */
+
 } GIST_SPLITVEC;
 
 /*

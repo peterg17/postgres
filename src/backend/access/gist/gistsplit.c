@@ -10,7 +10,7 @@
  * the tuples are "don't cares" so far as the column 1 split is concerned
  * (that is, they could go to either side for no additional penalty).  If so,
  * we try to redistribute those tuples on the basis of the next column.
- * Repeat till we're out of columns.
+ * Repeat till we're out of columns
  *
  * gistSplitByKey() is the entry point to this file.
  *
@@ -669,6 +669,7 @@ gistSplitByKey(Relation r, Page page, IndexTuple *itup, int len,
 		/*
 		 * We don't want to mix NULL and not-NULL keys on one page, so split
 		 * nulls to right page and not-nulls to left.
+		 * I guess we should handle this by splitting it up within the 4 quadrants?
 		 */
 		v->splitVector.spl_right = offNullTuples;
 		v->splitVector.spl_nright = nOffNullTuples;

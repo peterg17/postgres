@@ -5,7 +5,7 @@
 			node_n int, 
 			level int, 
 			tid_pointer tid, 
-			prefix box, 
+			prefix int, 
 			node_label int, 
 			leaf_value box
 		) where level = 2;
