@@ -82,19 +82,33 @@ gistunionsubkey(GISTSTATE *giststate, IndexTuple *itvec, GistSplitVector *spl)
 	GistSplitUnion gsvp;
 
 	gsvp.dontcare = spl->spl_dontcare;
-
-	gsvp.entries = spl->splitVector.spl_left;
-	gsvp.len = spl->splitVector.spl_nleft;
-	gsvp.attr = spl->spl_lattr;
-	gsvp.isnull = spl->spl_lisnull;
-
+	
+	// NorthWest Quadrant
+	gsvp.entries = spl->splitVector.spl_NW;
+	gsvp.len = spl->splitVector.spl_nNW;
+	gsvp.attr = spl->spl_NWattr;
+	gsvp.isnull = spl->spl_NWisnull;
 	gistunionsubkeyvec(giststate, itvec, &gsvp);
 
-	gsvp.entries = spl->splitVector.spl_right;
-	gsvp.len = spl->splitVector.spl_nright;
-	gsvp.attr = spl->spl_rattr;
-	gsvp.isnull = spl->spl_risnull;
+	// NorthEast Quadrant
+	gsvp.entries = spl->splitVector.spl_NE;
+	gsvp.len = spl->splitVector.spl_nNE;
+	gsvp.attr = spl->spl_NEattr;
+	gsvp.isnull = spl->spl_NEisnull;
+	gistunionsubkeyvec(giststate, itvec, &gsvp);
 
+	// SouthWest Quadrant
+	gsvp.entries = spl->splitVector.spl_SW;
+	gsvp.len = spl->splitVector.spl_nSW;
+	gsvp.attr = spl->spl_SWattr;
+	gsvp.isnull = spl->spl_SWisnull;
+	gistunionsubkeyvec(giststate, itvec, &gsvp);
+
+	// SouthEast Quadrant
+	gsvp.entries = spl->splitVector.spl_SE;
+	gsvp.len = spl->splitVector.spl_nSE;
+	gsvp.attr = spl->spl_SEattr;
+	gsvp.isnull = spl->spl_SEisnull;
 	gistunionsubkeyvec(giststate, itvec, &gsvp);
 }
 
@@ -242,6 +256,8 @@ do {	\
 } while(0)
 
 /*
+ * TODO: change supportSecondarySplit to do a secondary split over 4 ways (quadtree split)
+ * 
  * Clean up when we did a secondary split but the user-defined PickSplit
  * method didn't support it (leaving spl_ldatum_exists or spl_rdatum_exists
  * true).
@@ -253,27 +269,45 @@ do {	\
  * In any case we must update the union datums for the current column by
  * adding in the previous union keys (oldL/oldR), since the user-defined
  * PickSplit method didn't do so.
+ *  
+ *  * What is a secondary split? *
  */
 static void
 supportSecondarySplit(Relation r, GISTSTATE *giststate, int attno,
-					  GIST_SPLITVEC *sv, Datum oldL, Datum oldR)
+					  GIST_SPLITVEC *sv, Datum oldNW, Datum oldNE, Datum oldSW, Datum oldSE)
 {
 	bool		leaveOnLeft = true,
 				tmpBool;
-	GISTENTRY	entryL,
-				entryR,
-				entrySL,
-				entrySR;
 
-	gistentryinit(entryL, oldL, r, NULL, 0, false);
-	gistentryinit(entryR, oldR, r, NULL, 0, false);
-	gistentryinit(entrySL, sv->spl_ldatum, r, NULL, 0, false);
-	gistentryinit(entrySR, sv->spl_rdatum, r, NULL, 0, false);
+	bool		placeInNW = false,
+				placeInNE = false,
+				placeInSW = false,
+				placeInSE = false;
 
-	if (sv->spl_ldatum_exists && sv->spl_rdatum_exists)
+	GISTENTRY	oldEntryNW,
+				oldEntryNE,
+				oldEntrySW,
+				oldEntrySE,
+				newEntryNW,
+				newEntryNE,
+				newEntrySW,
+				newEntrySE;
+
+	gistentryinit(oldEntryNW, oldNW, r, NULL, 0, false);
+	gistentryinit(oldEntryNE, oldNE, r, NULL, 0, false);
+	gistentryinit(oldEntrySW, oldSW, r, NULL, 0, false);
+	gistentryinit(oldEntrySE, oldSE, r, NULL, 0, false);
+	gistentryinit(newEntryNW, sv->spl_NWdatum, r, NULL, 0, false);
+	gistentryinit(newEntryNE, sv->spl_NEdatum, r, NULL, 0, false);
+	gistentryinit(newEntrySW, sv->spl_SWdatum, r, NULL, 0, false);
+	gistentryinit(newEntrySE, sv->spl_SEdatum, r, NULL, 0, false);
+
+	if (sv->spl_NWdatum_exists && sv->spl_NEdatum_exists && sv->spl_SWdatum_exists && sv->spl_SEdatum_exists)
 	{
 		float		penalty1,
-					penalty2;
+					penalty2,
+					penalty3,
+					penalty4;
 
 		penalty1 = gistpenalty(giststate, attno, &entryL, false, &entrySL, false) +
 			gistpenalty(giststate, attno, &entryR, false, &entrySR, false);
@@ -290,6 +324,8 @@ supportSecondarySplit(Relation r, GISTSTATE *giststate, int attno,
 					penalty2;
 
 		/*
+         * Ahh I don't know how to fix this for several quadrants
+		 *
 		 * There is only one previously defined union, so we just choose swap
 		 * or not by lowest penalty for that side.  We can only get here if a
 		 * secondary split happened to have all NULLs in its column in the
@@ -352,44 +388,81 @@ genericPickSplit(GISTSTATE *giststate, GistEntryVector *entryvec, GIST_SPLITVEC 
 
 	nbytes = (maxoff + 2) * sizeof(OffsetNumber);
 
-	v->spl_left = (OffsetNumber *) palloc(nbytes);
-	v->spl_right = (OffsetNumber *) palloc(nbytes);
-	v->spl_nleft = v->spl_nright = 0;
+	v->spl_NW = (OffsetNumber *) palloc(nbytes);
+	v->spl_NE = (OffsetNumber *) palloc(nbytes);
+	v->spl_SW = (OffsetNumber *) palloc(nbytes);
+	v->spl_SE = (OffsetNumber *) palloc(nbytes);
+	v->spl_nNW = v->spl_nNE = v->spl_nSW = v->spl_nSE = 0;
 
 	for (i = FirstOffsetNumber; i <= maxoff; i = OffsetNumberNext(i))
 	{
-		if (i <= (maxoff - FirstOffsetNumber + 1) / 2)
+		// TODO: change check to be for each quadrant split
+		if (i <= (maxoff - FirstOffsetNumber + 1) / 4)
 		{
-			v->spl_left[v->spl_nleft] = i;
-			v->spl_nleft++;
+			// NW quadrant
+			v->spl_NW[v->spl_nNW] = i;
+			v->spl_nNW++;
+		} 
+		else if (i <= (maxoff - FirstOffsetNumber + 1) / 2)
+		{
+			// NE quadrant
+			v->spl_NE[v->spl_nNE] = i;
+			v->spl_nNE++;
+		}
+		else if (i <= 3*(maxoff - FirstOffsetNumber + 1) / 4)
+		{
+			// SW quadrant
+			v->spl_SW[v->spl_nSW] = i;
+			v->spl_nSW++;
 		}
 		else
 		{
-			v->spl_right[v->spl_nright] = i;
-			v->spl_nright++;
+			// SE quadrant
+			v->spl_SE[v->spl_nSE] = i;
+			v->spl_nSE++;
 		}
 	}
 
 	/*
-	 * Form union datums for each side
+	 * Form union datums for each quadrant
 	 */
 	evec = palloc(sizeof(GISTENTRY) * entryvec->n + GEVHDRSZ);
 
-	evec->n = v->spl_nleft;
+	// NW Quadrant
+	evec->n = v->spl_nNW;
 	memcpy(evec->vector, entryvec->vector + FirstOffsetNumber,
 		   sizeof(GISTENTRY) * evec->n);
-	v->spl_ldatum = FunctionCall2Coll(&giststate->unionFn[attno],
+	v->spl_NWdatum = FunctionCall2Coll(&giststate->unionFn[attno],
 									  giststate->supportCollation[attno],
 									  PointerGetDatum(evec),
 									  PointerGetDatum(&nbytes));
 
-	evec->n = v->spl_nright;
-	memcpy(evec->vector, entryvec->vector + FirstOffsetNumber + v->spl_nleft,
+	// NE Quadrant
+	evec->n = v->spl_nNE;
+	memcpy(evec->vector, entryvec->vector + FirstOffsetNumber + v->spl_nNW,
 		   sizeof(GISTENTRY) * evec->n);
-	v->spl_rdatum = FunctionCall2Coll(&giststate->unionFn[attno],
+	v->spl_NEdatum = FunctionCall2Coll(&giststate->unionFn[attno],
 									  giststate->supportCollation[attno],
 									  PointerGetDatum(evec),
 									  PointerGetDatum(&nbytes));
+
+	// SW Quadrant
+	evec->n = v->spl_nSW;
+	memcpy(evec->vector, entryvec->vector + FirstOffsetNumber + v->spl_nNW + v->spl_nNE,
+			sizeof(GISTENTRY) * evec->n);
+	v->spl_SWdatum = FunctionCall2Coll(&giststate->unionFn[attno], 
+									giststate->supportCollation[attno],
+									PointerGetDatum(evec),
+									PointerGetDatum(&nbytes));
+
+	// SE Quadrant
+	evec->n = v->spl_nSE;
+	memcpy(evec->vector, entryvec->vector + FirstOffsetNumber + v->spl_nNW + v->spl_nNE + v->spl_nSW,
+			sizeof(GISTENTRY) * evec->n);
+	v->spl_SEdatum = FunctionCall2Coll(&giststate->unionFn[attno],
+									giststate->supportCollation[attno],
+									PointerGetDatum(evec),
+									PointerGetDatum(&nbytes));			
 }
 
 /*
@@ -418,13 +491,18 @@ gistUserPicksplit(Relation r, GistEntryVector *entryvec, int attno, GistSplitVec
 	GIST_SPLITVEC *sv = &v->splitVector;
 
 	/*
-	 * Prepare spl_ldatum/spl_rdatum/spl_ldatum_exists/spl_rdatum_exists in
+	 * Prepare spl_NWdatum/spl_NEdatum/spl_NWdatum_exists/spl_NEdatum_exists in
 	 * case we are doing a secondary split (see comments in gist.h).
 	 */
-	sv->spl_ldatum_exists = (v->spl_lisnull[attno]) ? false : true;
-	sv->spl_rdatum_exists = (v->spl_risnull[attno]) ? false : true;
-	sv->spl_ldatum = v->spl_lattr[attno];
-	sv->spl_rdatum = v->spl_rattr[attno];
+
+	sv->spl_NWdatum_exists = (v->spl_NWisnull[attno]) ? false : true;
+	sv->spl_NEdatum_exists = (v->spl_NEisnull[attno]) ? false : true;
+	sv->spl_SWdatum_exists = (v->spl_SWisnull[attno]) ? false : true;
+	sv->spl_SEdatum_exists = (v->spl_SEisnull[attno]) ? false : true;
+	sv->spl_NWdatum = v->spl_NWattr[attno];
+	sv->spl_NEdatum = v->spl_NEattr[attno];
+	sv->spl_SWdatum = v->spl_SWattr[attno];
+	sv->spl_SEdatum = v->spl_SEattr[attno];
 
 	/*
 	 * Let the opclass-specific PickSplit method do its thing.  Note that at
@@ -435,7 +513,7 @@ gistUserPicksplit(Relation r, GistEntryVector *entryvec, int attno, GistSplitVec
 					  PointerGetDatum(entryvec),
 					  PointerGetDatum(sv));
 
-	if (sv->spl_nleft == 0 || sv->spl_nright == 0)
+	if (sv->spl_nNW == 0 || sv->spl_nNE == 0 || sv->spl_nSW == 0 || sv->spl_nSE == 0)
 	{
 		/*
 		 * User-defined picksplit failed to create an actual split, ie it put
@@ -451,27 +529,36 @@ gistUserPicksplit(Relation r, GistEntryVector *entryvec, int attno, GistSplitVec
 		 * Reinit GIST_SPLITVEC. Although these fields are not used by
 		 * genericPickSplit(), set them up for further processing
 		 */
-		sv->spl_ldatum_exists = (v->spl_lisnull[attno]) ? false : true;
-		sv->spl_rdatum_exists = (v->spl_risnull[attno]) ? false : true;
-		sv->spl_ldatum = v->spl_lattr[attno];
-		sv->spl_rdatum = v->spl_rattr[attno];
+		sv->spl_NWdatum_exists = (v->spl_NWisnull[attno]) ? false : true;
+		sv->spl_NEdatum_exists = (v->spl_NEisnull[attno]) ? false : true;
+		sv->spl_SWdatum_exists = (v->spl_SWisnull[attno]) ? false : true;
+		sv->spl_SEdatum_exists = (v->spl_SEisnull[attno]) ? false : true;
+		sv->spl_NWdatum = v->spl_NWattr[attno];
+		sv->spl_NEdatum = v->spl_NEattr[attno];
+		sv->spl_SWdatum = v->spl_SWattr[attno];
+		sv->spl_SEdatum = v->spl_SEattr[attno];
 
 		/* Do a generic split */
 		genericPickSplit(giststate, entryvec, sv, attno);
 	}
 	else
 	{
+		// i dont get why we have to do this...
 		/* hack for compatibility with old picksplit API */
-		if (sv->spl_left[sv->spl_nleft - 1] == InvalidOffsetNumber)
-			sv->spl_left[sv->spl_nleft - 1] = (OffsetNumber) (entryvec->n - 1);
-		if (sv->spl_right[sv->spl_nright - 1] == InvalidOffsetNumber)
-			sv->spl_right[sv->spl_nright - 1] = (OffsetNumber) (entryvec->n - 1);
+		if (sv->spl_NW[sv->spl_nNW - 1] == InvalidOffsetNumber)
+			sv->spl_NW[sv->spl_nNW - 1] = (OffsetNumber) (entryvec->n - 1);
+		if (sv->spl_NE[sv->spl_nNE - 1] == InvalidOffsetNumber)
+			sv->spl_NE[sv->spl_nNE - 1] = (OffsetNumber) (entryvec->n - 1);
+		if (sv->spl_SW[sv->spl_nSW - 1] == InvalidOffsetNumber)
+			sv->spl_SW[sv->spl_nSW - 1] = (OffsetNumber) (entryvec->n - 1);
+		if (sv->spl_SE[sv->spl_nSE - 1] == InvalidOffsetNumber) 
+			sv->spl_SE[sv->spl_nSE - 1] = (OffsetNumber) (entryvec->n - 1);
 	}
 
 	/* Clean up if PickSplit didn't take care of a secondary split */
-	if (sv->spl_ldatum_exists || sv->spl_rdatum_exists)
+	if (sv->spl_NWdatum_exists || sv->spl_NEdatum_exists || sv->spl_SWdatum_exists || sv->spl_SEdatum_exists)
 		supportSecondarySplit(r, giststate, attno, sv,
-							  v->spl_lattr[attno], v->spl_rattr[attno]);
+							  v->spl_NWattr[attno], v->spl_NEattr[attno], v->spl_SWattr[attno], v->spl_SEattr[attno]);
 
 	/* emit union datums computed by PickSplit back to v arrays */
 	v->spl_lattr[attno] = sv->spl_ldatum;
@@ -579,22 +666,30 @@ gistUserPicksplit(Relation r, GistEntryVector *entryvec, int attno, GistSplitVec
 }
 
 /*
- * simply split page in half
+ * simply split page in quarters because GiST splits into quadrants now
  */
 static void
-gistSplitHalf(GIST_SPLITVEC *v, int len)
+gistSplitQuarters(GIST_SPLITVEC *v, int len)
 {
 	int			i;
 
-	v->spl_nright = v->spl_nleft = 0;
-	v->spl_left = (OffsetNumber *) palloc(len * sizeof(OffsetNumber));
-	v->spl_right = (OffsetNumber *) palloc(len * sizeof(OffsetNumber));
-	for (i = 1; i <= len; i++)
-		if (i < len / 2)
-			v->spl_right[v->spl_nright++] = i;
-		else
-			v->spl_left[v->spl_nleft++] = i;
+	v->spl_nNW = v->spl_nNE = v->spl_nSW = v->spl_nSE = 0;
 
+	v->spl_NW = (OffsetNumber *) palloc(len * sizeof(OffsetNumber));
+	v->spl_NE = (OffsetNumber *) palloc(len * sizeof(OffsetNumber));
+	v->spl_SW = (OffsetNumber *) palloc(len * sizeof(OffsetNumber));
+	v->spl_SE = (OffsetNumber *) palloc(len * sizeof(OffsetNumber));
+
+	for (i = 1; i <= len; i++)
+		if (i < len / 4) {
+			v->spl_NW[v->spl_nNW++] = i;
+		} else if (i < len / 2) {
+			v->spl_NE[v->spl_nNE++] = i;
+		} else if (i < (3*len) / 4) {
+			v->spl_SW[v->spl_nSW++] = i;
+		} else {
+			v->spl_SE[v->spl_nSE++] = i;
+		}
 	/* we need not compute union keys, caller took care of it */
 }
 
@@ -655,12 +750,12 @@ gistSplitByKey(Relation r, Page page, IndexTuple *itup, int len,
 		 * our attention to the next column.  If there's no next column, just
 		 * split page in half.
 		 */
-		v->spl_risnull[attno] = v->spl_lisnull[attno] = true;
+		v->spl_NWisnull[attno] = v->spl_NEisnull[attno] = v->spl_SWisnull[attno] = v->spl_SEisnull[attno] = true;
 
 		if (attno + 1 < giststate->tupdesc->natts)
 			gistSplitByKey(r, page, itup, len, giststate, v, attno + 1);
 		else
-			gistSplitHalf(&v->splitVector, len);
+			gistSplitQuarters(&v->splitVector, len);
 	}
 	else if (nOffNullTuples > 0)
 	{
@@ -668,20 +763,37 @@ gistSplitByKey(Relation r, Page page, IndexTuple *itup, int len,
 
 		/*
 		 * We don't want to mix NULL and not-NULL keys on one page, so split
-		 * nulls to right page and not-nulls to left.
-		 * I guess we should handle this by splitting it up within the 4 quadrants?
+		 * nulls to NW page and non-nulls to other pages
+		 * TODO: I guess we should handle this by splitting it up within the 3 other quadrants?
 		 */
-		v->splitVector.spl_right = offNullTuples;
-		v->splitVector.spl_nright = nOffNullTuples;
-		v->spl_risnull[attno] = true;
+		v->splitVector.spl_NW = offNullTuples;
+		v->splitVector.spl_nNW = nOffNullTuples;
+		v->spl_NWisnull[attno] = true;
 
-		v->splitVector.spl_left = (OffsetNumber *) palloc(len * sizeof(OffsetNumber));
-		v->splitVector.spl_nleft = 0;
+		v->splitVector.spl_NE = (OffsetNumber *) palloc(len * sizeof(OffsetNumber));
+		v->splitVector.spl_nNE = 0;
+		v->splitVector.spl_SW = (OffsetNumber *) palloc(len * sizeof(OffsetNumber));
+		v->splitVector.spl_nSW = 0;
+		v->splitVector.spl_SE = (OffsetNumber *) palloc(len * sizeof(OffsetNumber));
+		v->splitVector.spl_nSE = 0;
+		int whichQuadrant;
+
 		for (i = 1; i <= len; i++)
-			if (j < v->splitVector.spl_nright && offNullTuples[j] == i)
+			if (j < v->splitVector.spl_nNW && offNullTuples[j] == i) {
 				j++;
-			else
-				v->splitVector.spl_left[v->splitVector.spl_nleft++] = i;
+			} else {
+				whichQuadrant = i % 3;
+				if (whichQuadrant == 0) {
+					v->splitVector.spl_NE[v->splitVector.spl_nNE++] = i;
+				} else if (whichQuadrant == 1) {
+					v->splitVector.spl_SW[v->splitVector.spl_nSW++] = i;
+				} else {
+					v->splitVector.spl_SE[v->splitVector.spl_nSE++] = i;
+				}
+			}
+
+
+		// after this loop, j should equal # of null tuples
 
 		/* Compute union keys, unless outer recursion level will handle it */
 		if (attno == 0 && giststate->tupdesc->natts == 1)

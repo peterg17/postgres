@@ -228,13 +228,21 @@ typedef struct GistSplitVector
 {
 	GIST_SPLITVEC splitVector;	/* passed to/from user PickSplit method */
 
-	Datum		spl_lattr[INDEX_MAX_KEYS];	/* Union of subkeys in
-											 * splitVector.spl_left */
-	bool		spl_lisnull[INDEX_MAX_KEYS];
+	Datum		spl_NWattr[INDEX_MAX_KEYS];	/* Union of subkeys in
+											 * splitVector.spl_NW */
+	bool		spl_NWisnull[INDEX_MAX_KEYS];
 
-	Datum		spl_rattr[INDEX_MAX_KEYS];	/* Union of subkeys in
-											 * splitVector.spl_right */
-	bool		spl_risnull[INDEX_MAX_KEYS];
+	Datum		spl_NEattr[INDEX_MAX_KEYS];	/* Union of subkeys in
+											 * splitVector.spl_NE */
+	bool		spl_NEisnull[INDEX_MAX_KEYS];
+
+	Datum		spl_SWattr[INDEX_MAX_KEYS]; /* Union of subkeys in 
+											 * splitVector.spl_SW */
+	bool		spl_SWisnull[INDEX_MAX_KEYS];
+
+	Datum		spl_SEattr[INDEX_MAX_KEYS]; /* Union of subkeys in 
+											 * splitVector.spl_SE */
+	bool		spl_SEisnull[INDEX_MAX_KEYS];
 
 	bool	   *spl_dontcare;	/* flags tuples which could go to either side
 								 * of the split for zero penalty */

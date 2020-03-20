@@ -112,25 +112,25 @@ typedef GISTPageOpaqueData *GISTPageOpaque;
  */
 typedef struct GIST_SPLITVEC
 {
-	OffsetNumber *spl_nw;		/* array of entries that go NW */
-	int			spl_nnw;		/* size of this array */
-	Datum		spl_nwdatum;		/* Union of keys in spl_nw */
-	bool		spl_nwdatum_exists;	/* true, if spl_nwdatum already exists. */
+	OffsetNumber *spl_NW;		/* array of entries that go NW */
+	int			spl_nNW;		/* size of this array */
+	Datum		spl_NWdatum;		/* Union of keys in spl_NW */
+	bool		spl_NWdatum_exists;	/* true, if spl_NWdatum already exists. */
 
-	OffsetNumber *spl_ne;	/* array of entries that go NE */
-	int			spl_nne;		/* size of the array */
-	Datum		spl_nedatum;		/* Union of keys in spl_ne */
-	bool		spl_nedatum_exists;	/* true, if spl_nedatum already exists. */
+	OffsetNumber *spl_NE;	/* array of entries that go NE */
+	int			spl_nNE;		/* size of the array */
+	Datum		spl_NEdatum;		/* Union of keys in spl_NE */
+	bool		spl_NEdatum_exists;	/* true, if spl_NEdatum already exists. */
 
-	OffsetNumber *spl_sw;	/* array of entries that go SW */
-	int			spl_nsw;		/* size of the array */
-	Datum		spl_swdatum;		/* Union of keys in spl_sw */
-	bool		spl_swdatum_exists;	/* true, if spl_swdatum already exists. */
+	OffsetNumber *spl_SW;	/* array of entries that go SW */
+	int			spl_nSW;		/* size of the array */
+	Datum		spl_SWdatum;		/* Union of keys in spl_SW */
+	bool		spl_SWdatum_exists;	/* true, if spl_SWdatum already exists. */
 	
-	OffsetNumber *spl_se;	/* array of entries that go SE */
-	int			spl_nse;		/* size of the array */
-	Datum		spl_sedatum;		/* Union of keys in spl_se */
-	bool		spl_sedatum_exists;	/* true, if spl_sedatum already exists. */
+	OffsetNumber *spl_SE;	/* array of entries that go SE */
+	int			spl_nSE;		/* size of the array */
+	Datum		spl_SEdatum;		/* Union of keys in spl_SE */
+	bool		spl_SEdatum_exists;	/* true, if spl_SEdatum already exists. */
 
 } GIST_SPLITVEC;
 
