@@ -211,57 +211,57 @@ gist_box_penalty(PG_FUNCTION_ARGS)
  * Trivial split: half of entries will be placed on one page
  * and another half - to another
  */
-static void
-fallbackSplit(GistEntryVector *entryvec, GIST_SPLITVEC *v)
-{
-	OffsetNumber i,
-				maxoff;
-	BOX		   *unionL = NULL,
-			   *unionR = NULL;
-	int			nbytes;
+// static void
+// fallbackSplit(GistEntryVector *entryvec, GIST_SPLITVEC *v)
+// {
+// 	OffsetNumber i,
+// 				maxoff;
+// 	BOX		   *unionL = NULL,
+// 			   *unionR = NULL;
+// 	int			nbytes;
 
-	maxoff = entryvec->n - 1;
+// 	maxoff = entryvec->n - 1;
 
-	nbytes = (maxoff + 2) * sizeof(OffsetNumber);
-	v->spl_left = (OffsetNumber *) palloc(nbytes);
-	v->spl_right = (OffsetNumber *) palloc(nbytes);
-	v->spl_nleft = v->spl_nright = 0;
+// 	nbytes = (maxoff + 2) * sizeof(OffsetNumber);
+// 	v->spl_left = (OffsetNumber *) palloc(nbytes);
+// 	v->spl_right = (OffsetNumber *) palloc(nbytes);
+// 	v->spl_nleft = v->spl_nright = 0;
 
-	for (i = FirstOffsetNumber; i <= maxoff; i = OffsetNumberNext(i))
-	{
-		BOX		   *cur = DatumGetBoxP(entryvec->vector[i].key);
+// 	for (i = FirstOffsetNumber; i <= maxoff; i = OffsetNumberNext(i))
+// 	{
+// 		BOX		   *cur = DatumGetBoxP(entryvec->vector[i].key);
 
-		if (i <= (maxoff - FirstOffsetNumber + 1) / 2)
-		{
-			v->spl_left[v->spl_nleft] = i;
-			if (unionL == NULL)
-			{
-				unionL = (BOX *) palloc(sizeof(BOX));
-				*unionL = *cur;
-			}
-			else
-				adjustBox(unionL, cur);
+// 		if (i <= (maxoff - FirstOffsetNumber + 1) / 2)
+// 		{
+// 			v->spl_left[v->spl_nleft] = i;
+// 			if (unionL == NULL)
+// 			{
+// 				unionL = (BOX *) palloc(sizeof(BOX));
+// 				*unionL = *cur;
+// 			}
+// 			else
+// 				adjustBox(unionL, cur);
 
-			v->spl_nleft++;
-		}
-		else
-		{
-			v->spl_right[v->spl_nright] = i;
-			if (unionR == NULL)
-			{
-				unionR = (BOX *) palloc(sizeof(BOX));
-				*unionR = *cur;
-			}
-			else
-				adjustBox(unionR, cur);
+// 			v->spl_nleft++;
+// 		}
+// 		else
+// 		{
+// 			v->spl_right[v->spl_nright] = i;
+// 			if (unionR == NULL)
+// 			{
+// 				unionR = (BOX *) palloc(sizeof(BOX));
+// 				*unionR = *cur;
+// 			}
+// 			else
+// 				adjustBox(unionR, cur);
 
-			v->spl_nright++;
-		}
-	}
+// 			v->spl_nright++;
+// 		}
+// 	}
 
-	v->spl_ldatum = BoxPGetDatum(unionL);
-	v->spl_rdatum = BoxPGetDatum(unionR);
-}
+// 	v->spl_ldatum = BoxPGetDatum(unionL);
+// 	v->spl_rdatum = BoxPGetDatum(unionR);
+// }
 
 /*
  * Represents information about an entry that can be placed to either group
@@ -346,110 +346,110 @@ non_negative(float val)
 /*
  * Consider replacement of currently selected split with the better one.
  */
-static inline void
-g_box_consider_split(ConsiderSplitContext *context, int dimNum,
-					 double rightLower, int minLeftCount,
-					 double leftUpper, int maxLeftCount)
-{
-	int			leftCount,
-				rightCount;
-	float4		ratio,
-				overlap;
-	double		range;
+// static inline void
+// g_box_consider_split(ConsiderSplitContext *context, int dimNum,
+// 					 double rightLower, int minLeftCount,
+// 					 double leftUpper, int maxLeftCount)
+// {
+// 	int			leftCount,
+// 				rightCount;
+// 	float4		ratio,
+// 				overlap;
+// 	double		range;
 
-	/*
-	 * Calculate entries distribution ratio assuming most uniform distribution
-	 * of common entries.
-	 */
-	if (minLeftCount >= (context->entriesCount + 1) / 2)
-	{
-		leftCount = minLeftCount;
-	}
-	else
-	{
-		if (maxLeftCount <= context->entriesCount / 2)
-			leftCount = maxLeftCount;
-		else
-			leftCount = context->entriesCount / 2;
-	}
-	rightCount = context->entriesCount - leftCount;
+// 	/*
+// 	 * Calculate entries distribution ratio assuming most uniform distribution
+// 	 * of common entries.
+// 	 */
+// 	if (minLeftCount >= (context->entriesCount + 1) / 2)
+// 	{
+// 		leftCount = minLeftCount;
+// 	}
+// 	else
+// 	{
+// 		if (maxLeftCount <= context->entriesCount / 2)
+// 			leftCount = maxLeftCount;
+// 		else
+// 			leftCount = context->entriesCount / 2;
+// 	}
+// 	rightCount = context->entriesCount - leftCount;
 
-	/*
-	 * Ratio of split - quotient between size of lesser group and total
-	 * entries count.
-	 */
-	ratio = ((float4) Min(leftCount, rightCount)) /
-		((float4) context->entriesCount);
+// 	/*
+// 	 * Ratio of split - quotient between size of lesser group and total
+// 	 * entries count.
+// 	 */
+// 	ratio = ((float4) Min(leftCount, rightCount)) /
+// 		((float4) context->entriesCount);
 
-	if (ratio > LIMIT_RATIO)
-	{
-		bool		selectthis = false;
+// 	if (ratio > LIMIT_RATIO)
+// 	{
+// 		bool		selectthis = false;
 
-		/*
-		 * The ratio is acceptable, so compare current split with previously
-		 * selected one. Between splits of one dimension we search for minimal
-		 * overlap (allowing negative values) and minimal ration (between same
-		 * overlaps. We switch dimension if find less overlap (non-negative)
-		 * or less range with same overlap.
-		 */
-		if (dimNum == 0)
-			range = context->boundingBox.high.x - context->boundingBox.low.x;
-		else
-			range = context->boundingBox.high.y - context->boundingBox.low.y;
+// 		/*
+// 		 * The ratio is acceptable, so compare current split with previously
+// 		 * selected one. Between splits of one dimension we search for minimal
+// 		 * overlap (allowing negative values) and minimal ration (between same
+// 		 * overlaps. We switch dimension if find less overlap (non-negative)
+// 		 * or less range with same overlap.
+// 		 */
+// 		if (dimNum == 0)
+// 			range = context->boundingBox.high.x - context->boundingBox.low.x;
+// 		else
+// 			range = context->boundingBox.high.y - context->boundingBox.low.y;
 
-		overlap = (leftUpper - rightLower) / range;
+// 		overlap = (leftUpper - rightLower) / range;
 
-		/* If there is no previous selection, select this */
-		if (context->first)
-			selectthis = true;
-		else if (context->dim == dimNum)
-		{
-			/*
-			 * Within the same dimension, choose the new split if it has a
-			 * smaller overlap, or same overlap but better ratio.
-			 */
-			if (overlap < context->overlap ||
-				(overlap == context->overlap && ratio > context->ratio))
-				selectthis = true;
-		}
-		else
-		{
-			/*
-			 * Across dimensions, choose the new split if it has a smaller
-			 * *non-negative* overlap, or same *non-negative* overlap but
-			 * bigger range. This condition differs from the one described in
-			 * the article. On the datasets where leaf MBRs don't overlap
-			 * themselves, non-overlapping splits (i.e. splits which have zero
-			 * *non-negative* overlap) are frequently possible. In this case
-			 * splits tends to be along one dimension, because most distant
-			 * non-overlapping splits (i.e. having lowest negative overlap)
-			 * appears to be in the same dimension as in the previous split.
-			 * Therefore MBRs appear to be very prolonged along another
-			 * dimension, which leads to bad search performance. Using range
-			 * as the second split criteria makes MBRs more quadratic. Using
-			 * *non-negative* overlap instead of overlap as the first split
-			 * criteria gives to range criteria a chance to matter, because
-			 * non-overlapping splits are equivalent in this criteria.
-			 */
-			if (non_negative(overlap) < non_negative(context->overlap) ||
-				(range > context->range &&
-				 non_negative(overlap) <= non_negative(context->overlap)))
-				selectthis = true;
-		}
+// 		/* If there is no previous selection, select this */
+// 		if (context->first)
+// 			selectthis = true;
+// 		else if (context->dim == dimNum)
+// 		{
+// 			/*
+// 			 * Within the same dimension, choose the new split if it has a
+// 			 * smaller overlap, or same overlap but better ratio.
+// 			 */
+// 			if (overlap < context->overlap ||
+// 				(overlap == context->overlap && ratio > context->ratio))
+// 				selectthis = true;
+// 		}
+// 		else
+// 		{
+// 			/*
+// 			 * Across dimensions, choose the new split if it has a smaller
+// 			 * *non-negative* overlap, or same *non-negative* overlap but
+// 			 * bigger range. This condition differs from the one described in
+// 			 * the article. On the datasets where leaf MBRs don't overlap
+// 			 * themselves, non-overlapping splits (i.e. splits which have zero
+// 			 * *non-negative* overlap) are frequently possible. In this case
+// 			 * splits tends to be along one dimension, because most distant
+// 			 * non-overlapping splits (i.e. having lowest negative overlap)
+// 			 * appears to be in the same dimension as in the previous split.
+// 			 * Therefore MBRs appear to be very prolonged along another
+// 			 * dimension, which leads to bad search performance. Using range
+// 			 * as the second split criteria makes MBRs more quadratic. Using
+// 			 * *non-negative* overlap instead of overlap as the first split
+// 			 * criteria gives to range criteria a chance to matter, because
+// 			 * non-overlapping splits are equivalent in this criteria.
+// 			 */
+// 			if (non_negative(overlap) < non_negative(context->overlap) ||
+// 				(range > context->range &&
+// 				 non_negative(overlap) <= non_negative(context->overlap)))
+// 				selectthis = true;
+// 		}
 
-		if (selectthis)
-		{
-			/* save information about selected split */
-			context->first = false;
-			context->ratio = ratio;
-			context->range = range;
-			context->overlap = overlap;
-			context->rightLower = rightLower;
-			context->leftUpper = leftUpper;
-			context->dim = dimNum;
-		}
-	}
-}
+// 		if (selectthis)
+// 		{
+// 			/* save information about selected split */
+// 			context->first = false;
+// 			context->ratio = ratio;
+// 			context->range = range;
+// 			context->overlap = overlap;
+// 			context->rightLower = rightLower;
+// 			context->leftUpper = leftUpper;
+// 			context->dim = dimNum;
+// 		}
+// 	}
+// }
 
 /*
  * Compare common entries by their deltas.
@@ -504,23 +504,23 @@ gist_box_picksplit(PG_FUNCTION_ARGS)
 				maxoff;
 	ConsiderSplitContext context;
 	BOX		   *box,
-			   *leftBox,
-			   *rightBox;
+			   *NWBox,
+			   *NEBox,
+			   *SWBox,
+			   *SEBox;
 	int			dim,
 				commonEntriesCount;
 	SplitInterval *intervalsLower,
 			   *intervalsUpper;
 	CommonEntry *commonEntries;
 	int			nentries;
+	int 		boxCentroidX,
+				boxCentroidY;
 
 	memset(&context, 0, sizeof(ConsiderSplitContext));
 
 	maxoff = entryvec->n - 1;
 	nentries = context.entriesCount = maxoff - FirstOffsetNumber + 1;
-
-	/* Allocate arrays for intervals along axes */
-	intervalsLower = (SplitInterval *) palloc(nentries * sizeof(SplitInterval));
-	intervalsUpper = (SplitInterval *) palloc(nentries * sizeof(SplitInterval));
 
 	/*
 	 * Calculate the overall minimum bounding box over all the entries.
@@ -534,311 +534,89 @@ gist_box_picksplit(PG_FUNCTION_ARGS)
 			adjustBox(&context.boundingBox, box);
 	}
 
-	/*
-	 * Iterate over axes for optimal split searching.
-	 */
-	context.first = true;		/* nothing selected yet */
-	for (dim = 0; dim < 2; dim++)
-	{
-		double		leftUpper,
-					rightLower;
-		int			i1,
-					i2;
+	/* Allocate bounding boxes of left and right groups */
+	NWBox = palloc0(sizeof(BOX));
+	NEBox = palloc0(sizeof(BOX));
+	SWBox = palloc0(sizeof(BOX));
+	SEBox = palloc0(sizeof(BOX));
 
-		/* Project each entry as an interval on the selected axis. */
-		for (i = FirstOffsetNumber; i <= maxoff; i = OffsetNumberNext(i))
-		{
-			box = DatumGetBoxP(entryvec->vector[i].key);
-			if (dim == 0)
-			{
-				intervalsLower[i - FirstOffsetNumber].lower = box->low.x;
-				intervalsLower[i - FirstOffsetNumber].upper = box->high.x;
-			}
-			else
-			{
-				intervalsLower[i - FirstOffsetNumber].lower = box->low.y;
-				intervalsLower[i - FirstOffsetNumber].upper = box->high.y;
-			}
-		}
+	int middleX = context.boundingBox.low.x + ((context.boundingBox.high.x - context.boundingBox.low.x) / 2);
+	int middleY = context.boundingBox.low.y + ((context.boundingBox.high.y - context.boundingBox.low.y) / 2);
 
-		/*
-		 * Make two arrays of intervals: one sorted by lower bound and another
-		 * sorted by upper bound.
-		 */
-		memcpy(intervalsUpper, intervalsLower,
-			   sizeof(SplitInterval) * nentries);
-		qsort(intervalsLower, nentries, sizeof(SplitInterval),
-			  interval_cmp_lower);
-		qsort(intervalsUpper, nentries, sizeof(SplitInterval),
-			  interval_cmp_upper);
-
-		/*----
-		 * The goal is to form a left and right interval, so that every entry
-		 * interval is contained by either left or right interval (or both).
-		 *
-		 * For example, with the intervals (0,1), (1,3), (2,3), (2,4):
-		 *
-		 * 0 1 2 3 4
-		 * +-+
-		 *	 +---+
-		 *	   +-+
-		 *	   +---+
-		 *
-		 * The left and right intervals are of the form (0,a) and (b,4).
-		 * We first consider splits where b is the lower bound of an entry.
-		 * We iterate through all entries, and for each b, calculate the
-		 * smallest possible a. Then we consider splits where a is the
-		 * upper bound of an entry, and for each a, calculate the greatest
-		 * possible b.
-		 *
-		 * In the above example, the first loop would consider splits:
-		 * b=0: (0,1)-(0,4)
-		 * b=1: (0,1)-(1,4)
-		 * b=2: (0,3)-(2,4)
-		 *
-		 * And the second loop:
-		 * a=1: (0,1)-(1,4)
-		 * a=3: (0,3)-(2,4)
-		 * a=4: (0,4)-(2,4)
-		 */
-
-		/*
-		 * Iterate over lower bound of right group, finding smallest possible
-		 * upper bound of left group.
-		 */
-		i1 = 0;
-		i2 = 0;
-		rightLower = intervalsLower[i1].lower;
-		leftUpper = intervalsUpper[i2].lower;
-		while (true)
-		{
-			/*
-			 * Find next lower bound of right group.
-			 */
-			while (i1 < nentries &&
-				   FLOAT8_EQ(rightLower, intervalsLower[i1].lower))
-			{
-				if (FLOAT8_LT(leftUpper, intervalsLower[i1].upper))
-					leftUpper = intervalsLower[i1].upper;
-				i1++;
-			}
-			if (i1 >= nentries)
-				break;
-			rightLower = intervalsLower[i1].lower;
-
-			/*
-			 * Find count of intervals which anyway should be placed to the
-			 * left group.
-			 */
-			while (i2 < nentries &&
-				   FLOAT8_LE(intervalsUpper[i2].upper, leftUpper))
-				i2++;
-
-			/*
-			 * Consider found split.
-			 */
-			g_box_consider_split(&context, dim, rightLower, i1, leftUpper, i2);
-		}
-
-		/*
-		 * Iterate over upper bound of left group finding greatest possible
-		 * lower bound of right group.
-		 */
-		i1 = nentries - 1;
-		i2 = nentries - 1;
-		rightLower = intervalsLower[i1].upper;
-		leftUpper = intervalsUpper[i2].upper;
-		while (true)
-		{
-			/*
-			 * Find next upper bound of left group.
-			 */
-			while (i2 >= 0 && FLOAT8_EQ(leftUpper, intervalsUpper[i2].upper))
-			{
-				if (FLOAT8_GT(rightLower, intervalsUpper[i2].lower))
-					rightLower = intervalsUpper[i2].lower;
-				i2--;
-			}
-			if (i2 < 0)
-				break;
-			leftUpper = intervalsUpper[i2].upper;
-
-			/*
-			 * Find count of intervals which anyway should be placed to the
-			 * right group.
-			 */
-			while (i1 >= 0 && FLOAT8_GE(intervalsLower[i1].lower, rightLower))
-				i1--;
-
-			/*
-			 * Consider found split.
-			 */
-			g_box_consider_split(&context, dim,
-								 rightLower, i1 + 1, leftUpper, i2 + 1);
-		}
-	}
-
-	/*
-	 * If we failed to find any acceptable splits, use trivial split.
-	 */
-	if (context.first)
-	{
-		fallbackSplit(entryvec, v);
-		PG_RETURN_POINTER(v);
-	}
-
-	/*
-	 * Ok, we have now selected the split across one axis.
-	 *
-	 * While considering the splits, we already determined that there will be
-	 * enough entries in both groups to reach the desired ratio, but we did
-	 * not memorize which entries go to which group. So determine that now.
-	 */
+	// Step 1: divide overall minimum bounding box evenly into 4 quadrants 
+	// 		these will be the union keys for each quadtree cell
+	// init NW Quadrant
+	NWBox->low.x = context.boundingBox.low.x;
+	NWBox->low.y = middleY;
+	NWBox->high.x = middleX;
+	NWBox->high.y = context.boundingBox.high.y;
+	// init NE Quadrant
+	NEBox->low.x = middleX;
+	NEBox->low.y = middleY;
+	NEBox->high.x = context.boundingBox.high.x;
+	NEBox->high.y = context.boundingBox.high.y;
+	// init SW Quadrant
+	SWBox->low.x = context.boundingBox.low.x;
+	SWBox->low.y = context.boundingBox.low.y;
+	SWBox->high.x = middleX;
+	SWBox->high.y = middleY;
+	// init SE Quadrant
+	SWBox->low.x = middleX;
+	SWBox->low.y = context.boundingBox.low.y;
+	SWBox->high.x = context.boundingBox.high.x;
+	SWBox->high.y = middleY;
 
 	/* Allocate vectors for results */
-	v->spl_left = (OffsetNumber *) palloc(nentries * sizeof(OffsetNumber));
-	v->spl_right = (OffsetNumber *) palloc(nentries * sizeof(OffsetNumber));
-	v->spl_nleft = 0;
-	v->spl_nright = 0;
+	v->spl_NW = (OffsetNumber *) palloc(nentries * sizeof(OffsetNumber));
+	v->spl_NE = (OffsetNumber *) palloc(nentries * sizeof(OffsetNumber));
+	v->spl_SW = (OffsetNumber *) palloc(nentries * sizeof(OffsetNumber));
+	v->spl_SE = (OffsetNumber *) palloc(nentries * sizeof(OffsetNumber));
+	v->spl_nNW = 0;
+	v->spl_nNE = 0;
+	v->spl_nSW = 0;
+	v->spl_nSE = 0;
 
-	/* Allocate bounding boxes of left and right groups */
-	leftBox = palloc0(sizeof(BOX));
-	rightBox = palloc0(sizeof(BOX));
-
-	/*
-	 * Allocate an array for "common entries" - entries which can be placed to
-	 * either group without affecting overlap along selected axis.
-	 */
-	commonEntriesCount = 0;
-	commonEntries = (CommonEntry *) palloc(nentries * sizeof(CommonEntry));
-
-	/* Helper macros to place an entry in the left or right group */
-#define PLACE_LEFT(box, off)					\
-	do {										\
-		if (v->spl_nleft > 0)					\
-			adjustBox(leftBox, box);			\
-		else									\
-			*leftBox = *(box);					\
-		v->spl_left[v->spl_nleft++] = off;		\
-	} while(0)
-
-#define PLACE_RIGHT(box, off)					\
-	do {										\
-		if (v->spl_nright > 0)					\
-			adjustBox(rightBox, box);			\
-		else									\
-			*rightBox = *(box);					\
-		v->spl_right[v->spl_nright++] = off;	\
-	} while(0)
-
-	/*
-	 * Distribute entries which can be distributed unambiguously, and collect
-	 * common entries.
-	 */
-	for (i = FirstOffsetNumber; i <= maxoff; i = OffsetNumberNext(i))
+	// Step 2:  iterate over entries and assign to cell based on centroid, also expand
+	// 		the cell if necessary
+	for (i = FirstOffsetNumber; i <= maxoff; i = OffsetNumberNext(i)) 
 	{
-		double		lower,
-					upper;
-
-		/*
-		 * Get upper and lower bounds along selected axis.
-		 */
 		box = DatumGetBoxP(entryvec->vector[i].key);
-		if (context.dim == 0)
-		{
-			lower = box->low.x;
-			upper = box->high.x;
-		}
-		else
-		{
-			lower = box->low.y;
-			upper = box->high.y;
-		}
-
-		if (FLOAT8_LE(upper, context.leftUpper))
-		{
-			/* Fits to the left group */
-			if (FLOAT8_GE(lower, context.rightLower))
-			{
-				/* Fits also to the right group, so "common entry" */
-				commonEntries[commonEntriesCount++].index = i;
+		boxCentroidX = box->low.x + ((box->high.x - box->low.x) / 2);
+		boxCentroidY = box->low.y + ((box->high.y - box->low.y) / 2);
+		if (boxCentroidY >= middleY) {
+			// entry is either in NW or NE quadrant
+			if (boxCentroidX >= middleX) {
+				// place in NE quadrant
+				v->spl_NE[v->spl_nNE] = i;
+				v->spl_nNE++;
+				adjustBox(NEBox, box);
+			} else {
+				// place in NW quadrant
+				v->spl_NW[v->spl_nNW] = i;
+				v->spl_nNW++;
+				adjust(NWBox, box);
 			}
-			else
-			{
-				/* Doesn't fit to the right group, so join to the left group */
-				PLACE_LEFT(box, i);
-			}
-		}
-		else
-		{
-			/*
-			 * Each entry should fit on either left or right group. Since this
-			 * entry didn't fit on the left group, it better fit in the right
-			 * group.
-			 */
-			Assert(FLOAT8_GE(lower, context.rightLower));
-
-			/* Doesn't fit to the left group, so join to the right group */
-			PLACE_RIGHT(box, i);
-		}
-	}
-
-	/*
-	 * Distribute "common entries", if any.
-	 */
-	if (commonEntriesCount > 0)
-	{
-		/*
-		 * Calculate minimum number of entries that must be placed in both
-		 * groups, to reach LIMIT_RATIO.
-		 */
-		int			m = ceil(LIMIT_RATIO * (double) nentries);
-
-		/*
-		 * Calculate delta between penalties of join "common entries" to
-		 * different groups.
-		 */
-		for (i = 0; i < commonEntriesCount; i++)
-		{
-			box = DatumGetBoxP(entryvec->vector[commonEntries[i].index].key);
-			commonEntries[i].delta = Abs(box_penalty(leftBox, box) -
-										 box_penalty(rightBox, box));
-		}
-
-		/*
-		 * Sort "common entries" by calculated deltas in order to distribute
-		 * the most ambiguous entries first.
-		 */
-		qsort(commonEntries, commonEntriesCount, sizeof(CommonEntry), common_entry_cmp);
-
-		/*
-		 * Distribute "common entries" between groups.
-		 */
-		for (i = 0; i < commonEntriesCount; i++)
-		{
-			box = DatumGetBoxP(entryvec->vector[commonEntries[i].index].key);
-
-			/*
-			 * Check if we have to place this entry in either group to achieve
-			 * LIMIT_RATIO.
-			 */
-			if (v->spl_nleft + (commonEntriesCount - i) <= m)
-				PLACE_LEFT(box, commonEntries[i].index);
-			else if (v->spl_nright + (commonEntriesCount - i) <= m)
-				PLACE_RIGHT(box, commonEntries[i].index);
-			else
-			{
-				/* Otherwise select the group by minimal penalty */
-				if (box_penalty(leftBox, box) < box_penalty(rightBox, box))
-					PLACE_LEFT(box, commonEntries[i].index);
-				else
-					PLACE_RIGHT(box, commonEntries[i].index);
+		} else {
+			// entry is eitehr in SW or SE quadrant
+			if (boxCentroidX >= middleX) {
+				// place in SE quadrant
+				v->spl_SE[v->spl_nSE] = i;
+				v->spl_nSE++;
+				adjustBox(SEBox, box);
+			} else {
+				// place in SW quadrant
+				v->spl_SW[v->spl_nSW] = i;
+				v->spl_nSW++;
+				adjustBox(SWBox, box);
 			}
 		}
 	}
 
-	v->spl_ldatum = PointerGetDatum(leftBox);
-	v->spl_rdatum = PointerGetDatum(rightBox);
+	// v->spl_ldatum = PointerGetDatum(leftBox);
+	v->spl_NWdatum = PointerGetDatum(NWBox);
+	v->spl_NEdatum = PointerGetDatum(NEBox);
+	v->spl_SWdatum = PointerGetDatum(SWBox);
+	v->spl_SEdatum = PointerGetDatum(SEBox);
 	PG_RETURN_POINTER(v);
 }
 

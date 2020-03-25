@@ -123,54 +123,54 @@ gistunionsubkey(GISTSTATE *giststate, IndexTuple *itvec, GistSplitVector *spl)
  *
  * Returns number of don't-cares found.
  */
-static int
-findDontCares(Relation r, GISTSTATE *giststate, GISTENTRY *valvec,
-			  GistSplitVector *spl, int attno)
-{
-	int			i;
-	GISTENTRY	entry;
-	int			NumDontCare = 0;
+// static int
+// findDontCares(Relation r, GISTSTATE *giststate, GISTENTRY *valvec,
+// 			  GistSplitVector *spl, int attno)
+// {
+// 	int			i;
+// 	GISTENTRY	entry;
+// 	int			NumDontCare = 0;
 
-	/*
-	 * First, search the left-side tuples to see if any have zero penalty to
-	 * be added to the right-side union key.
-	 *
-	 * attno column is known all-not-null (see gistSplitByKey), so we need not
-	 * check for nulls
-	 */
-	gistentryinit(entry, spl->splitVector.spl_rdatum, r, NULL,
-				  (OffsetNumber) 0, false);
-	for (i = 0; i < spl->splitVector.spl_nleft; i++)
-	{
-		int			j = spl->splitVector.spl_left[i];
-		float		penalty = gistpenalty(giststate, attno, &entry, false,
-										  &valvec[j], false);
+// 	/*
+// 	 * First, search the left-side tuples to see if any have zero penalty to
+// 	 * be added to the right-side union key.
+// 	 *
+// 	 * attno column is known all-not-null (see gistSplitByKey), so we need not
+// 	 * check for nulls
+// 	 */
+// 	gistentryinit(entry, spl->splitVector.spl_rdatum, r, NULL,
+// 				  (OffsetNumber) 0, false);
+// 	for (i = 0; i < spl->splitVector.spl_nleft; i++)
+// 	{
+// 		int			j = spl->splitVector.spl_left[i];
+// 		float		penalty = gistpenalty(giststate, attno, &entry, false,
+// 										  &valvec[j], false);
 
-		if (penalty == 0.0)
-		{
-			spl->spl_dontcare[j] = true;
-			NumDontCare++;
-		}
-	}
+// 		if (penalty == 0.0)
+// 		{
+// 			spl->spl_dontcare[j] = true;
+// 			NumDontCare++;
+// 		}
+// 	}
 
-	/* And conversely for the right-side tuples */
-	gistentryinit(entry, spl->splitVector.spl_ldatum, r, NULL,
-				  (OffsetNumber) 0, false);
-	for (i = 0; i < spl->splitVector.spl_nright; i++)
-	{
-		int			j = spl->splitVector.spl_right[i];
-		float		penalty = gistpenalty(giststate, attno, &entry, false,
-										  &valvec[j], false);
+// 	/* And conversely for the right-side tuples */
+// 	gistentryinit(entry, spl->splitVector.spl_ldatum, r, NULL,
+// 				  (OffsetNumber) 0, false);
+// 	for (i = 0; i < spl->splitVector.spl_nright; i++)
+// 	{
+// 		int			j = spl->splitVector.spl_right[i];
+// 		float		penalty = gistpenalty(giststate, attno, &entry, false,
+// 										  &valvec[j], false);
 
-		if (penalty == 0.0)
-		{
-			spl->spl_dontcare[j] = true;
-			NumDontCare++;
-		}
-	}
+// 		if (penalty == 0.0)
+// 		{
+// 			spl->spl_dontcare[j] = true;
+// 			NumDontCare++;
+// 		}
+// 	}
 
-	return NumDontCare;
-}
+// 	return NumDontCare;
+// }
 
 /*
  * Remove tuples that are marked don't-cares from the tuple index array a[]
@@ -210,43 +210,43 @@ removeDontCares(OffsetNumber *a, int *len, const bool *dontcare)
  * the previously-computed union keys.  We need consider only columns starting
  * at attno.
  */
-static void
-placeOne(Relation r, GISTSTATE *giststate, GistSplitVector *v,
-		 IndexTuple itup, OffsetNumber off, int attno)
-{
-	GISTENTRY	identry[INDEX_MAX_KEYS];
-	bool		isnull[INDEX_MAX_KEYS];
-	bool		toLeft = true;
+// static void
+// placeOne(Relation r, GISTSTATE *giststate, GistSplitVector *v,
+// 		 IndexTuple itup, OffsetNumber off, int attno)
+// {
+// 	GISTENTRY	identry[INDEX_MAX_KEYS];
+// 	bool		isnull[INDEX_MAX_KEYS];
+// 	bool		toLeft = true;
 
-	gistDeCompressAtt(giststate, r, itup, NULL, (OffsetNumber) 0,
-					  identry, isnull);
+// 	gistDeCompressAtt(giststate, r, itup, NULL, (OffsetNumber) 0,
+// 					  identry, isnull);
 
-	for (; attno < giststate->tupdesc->natts; attno++)
-	{
-		float		lpenalty,
-					rpenalty;
-		GISTENTRY	entry;
+// 	for (; attno < giststate->tupdesc->natts; attno++)
+// 	{
+// 		float		lpenalty,
+// 					rpenalty;
+// 		GISTENTRY	entry;
 
-		gistentryinit(entry, v->spl_lattr[attno], r, NULL, 0, false);
-		lpenalty = gistpenalty(giststate, attno, &entry, v->spl_lisnull[attno],
-							   identry + attno, isnull[attno]);
-		gistentryinit(entry, v->spl_rattr[attno], r, NULL, 0, false);
-		rpenalty = gistpenalty(giststate, attno, &entry, v->spl_risnull[attno],
-							   identry + attno, isnull[attno]);
+// 		gistentryinit(entry, v->spl_lattr[attno], r, NULL, 0, false);
+// 		lpenalty = gistpenalty(giststate, attno, &entry, v->spl_lisnull[attno],
+// 							   identry + attno, isnull[attno]);
+// 		gistentryinit(entry, v->spl_rattr[attno], r, NULL, 0, false);
+// 		rpenalty = gistpenalty(giststate, attno, &entry, v->spl_risnull[attno],
+// 							   identry + attno, isnull[attno]);
 
-		if (lpenalty != rpenalty)
-		{
-			if (lpenalty > rpenalty)
-				toLeft = false;
-			break;
-		}
-	}
+// 		if (lpenalty != rpenalty)
+// 		{
+// 			if (lpenalty > rpenalty)
+// 				toLeft = false;
+// 			break;
+// 		}
+// 	}
 
-	if (toLeft)
-		v->splitVector.spl_left[v->splitVector.spl_nleft++] = off;
-	else
-		v->splitVector.spl_right[v->splitVector.spl_nright++] = off;
-}
+// 	if (toLeft)
+// 		v->splitVector.spl_left[v->splitVector.spl_nleft++] = off;
+// 	else
+// 		v->splitVector.spl_right[v->splitVector.spl_nright++] = off;
+// }
 
 #define SWAPVAR( s, d, t ) \
 do {	\
@@ -272,104 +272,104 @@ do {	\
  *  
  *  * What is a secondary split? *
  */
-static void
-supportSecondarySplit(Relation r, GISTSTATE *giststate, int attno,
-					  GIST_SPLITVEC *sv, Datum oldNW, Datum oldNE, Datum oldSW, Datum oldSE)
-{
-	bool		leaveOnLeft = true,
-				tmpBool;
+// static void
+// supportSecondarySplit(Relation r, GISTSTATE *giststate, int attno,
+// 					  GIST_SPLITVEC *sv, Datum oldNW, Datum oldNE, Datum oldSW, Datum oldSE)
+// {
+// 	bool		leaveOnLeft = true,
+// 				tmpBool;
 
-	bool		placeInNW = false,
-				placeInNE = false,
-				placeInSW = false,
-				placeInSE = false;
+// 	bool		placeInNW = false,
+// 				placeInNE = false,
+// 				placeInSW = false,
+// 				placeInSE = false;
 
-	GISTENTRY	oldEntryNW,
-				oldEntryNE,
-				oldEntrySW,
-				oldEntrySE,
-				newEntryNW,
-				newEntryNE,
-				newEntrySW,
-				newEntrySE;
+// 	GISTENTRY	oldEntryNW,
+// 				oldEntryNE,
+// 				oldEntrySW,
+// 				oldEntrySE,
+// 				newEntryNW,
+// 				newEntryNE,
+// 				newEntrySW,
+// 				newEntrySE;
 
-	gistentryinit(oldEntryNW, oldNW, r, NULL, 0, false);
-	gistentryinit(oldEntryNE, oldNE, r, NULL, 0, false);
-	gistentryinit(oldEntrySW, oldSW, r, NULL, 0, false);
-	gistentryinit(oldEntrySE, oldSE, r, NULL, 0, false);
-	gistentryinit(newEntryNW, sv->spl_NWdatum, r, NULL, 0, false);
-	gistentryinit(newEntryNE, sv->spl_NEdatum, r, NULL, 0, false);
-	gistentryinit(newEntrySW, sv->spl_SWdatum, r, NULL, 0, false);
-	gistentryinit(newEntrySE, sv->spl_SEdatum, r, NULL, 0, false);
+// 	gistentryinit(oldEntryNW, oldNW, r, NULL, 0, false);
+// 	gistentryinit(oldEntryNE, oldNE, r, NULL, 0, false);
+// 	gistentryinit(oldEntrySW, oldSW, r, NULL, 0, false);
+// 	gistentryinit(oldEntrySE, oldSE, r, NULL, 0, false);
+// 	gistentryinit(newEntryNW, sv->spl_NWdatum, r, NULL, 0, false);
+// 	gistentryinit(newEntryNE, sv->spl_NEdatum, r, NULL, 0, false);
+// 	gistentryinit(newEntrySW, sv->spl_SWdatum, r, NULL, 0, false);
+// 	gistentryinit(newEntrySE, sv->spl_SEdatum, r, NULL, 0, false);
 
-	if (sv->spl_NWdatum_exists && sv->spl_NEdatum_exists && sv->spl_SWdatum_exists && sv->spl_SEdatum_exists)
-	{
-		float		penalty1,
-					penalty2,
-					penalty3,
-					penalty4;
+// 	if (sv->spl_NWdatum_exists && sv->spl_NEdatum_exists && sv->spl_SWdatum_exists && sv->spl_SEdatum_exists)
+// 	{
+// 		float		penalty1,
+// 					penalty2,
+// 					penalty3,
+// 					penalty4;
 
-		penalty1 = gistpenalty(giststate, attno, &entryL, false, &entrySL, false) +
-			gistpenalty(giststate, attno, &entryR, false, &entrySR, false);
-		penalty2 = gistpenalty(giststate, attno, &entryL, false, &entrySR, false) +
-			gistpenalty(giststate, attno, &entryR, false, &entrySL, false);
+// 		penalty1 = gistpenalty(giststate, attno, &entryL, false, &entrySL, false) +
+// 			gistpenalty(giststate, attno, &entryR, false, &entrySR, false);
+// 		penalty2 = gistpenalty(giststate, attno, &entryL, false, &entrySR, false) +
+// 			gistpenalty(giststate, attno, &entryR, false, &entrySL, false);
 
-		if (penalty1 > penalty2)
-			leaveOnLeft = false;
-	}
-	else
-	{
-		GISTENTRY  *entry1 = (sv->spl_ldatum_exists) ? &entryL : &entryR;
-		float		penalty1,
-					penalty2;
+// 		if (penalty1 > penalty2)
+// 			leaveOnLeft = false;
+// 	}
+// 	else
+// 	{
+// 		GISTENTRY  *entry1 = (sv->spl_ldatum_exists) ? &entryL : &entryR;
+// 		float		penalty1,
+// 					penalty2;
 
-		/*
-         * Ahh I don't know how to fix this for several quadrants
-		 *
-		 * There is only one previously defined union, so we just choose swap
-		 * or not by lowest penalty for that side.  We can only get here if a
-		 * secondary split happened to have all NULLs in its column in the
-		 * tuples that the outer recursion level had assigned to one side.
-		 * (Note that the null checks in gistSplitByKey don't prevent the
-		 * case, because they'll only be checking tuples that were considered
-		 * don't-cares at the outer recursion level, not the tuples that went
-		 * into determining the passed-down left and right union keys.)
-		 */
-		penalty1 = gistpenalty(giststate, attno, entry1, false, &entrySL, false);
-		penalty2 = gistpenalty(giststate, attno, entry1, false, &entrySR, false);
+// 		/*
+//          * Ahh I don't know how to fix this for several quadrants
+// 		 *
+// 		 * There is only one previously defined union, so we just choose swap
+// 		 * or not by lowest penalty for that side.  We can only get here if a
+// 		 * secondary split happened to have all NULLs in its column in the
+// 		 * tuples that the outer recursion level had assigned to one side.
+// 		 * (Note that the null checks in gistSplitByKey don't prevent the
+// 		 * case, because they'll only be checking tuples that were considered
+// 		 * don't-cares at the outer recursion level, not the tuples that went
+// 		 * into determining the passed-down left and right union keys.)
+// 		 */
+// 		penalty1 = gistpenalty(giststate, attno, entry1, false, &entrySL, false);
+// 		penalty2 = gistpenalty(giststate, attno, entry1, false, &entrySR, false);
 
-		if (penalty1 < penalty2)
-			leaveOnLeft = (sv->spl_ldatum_exists) ? true : false;
-		else
-			leaveOnLeft = (sv->spl_rdatum_exists) ? true : false;
-	}
+// 		if (penalty1 < penalty2)
+// 			leaveOnLeft = (sv->spl_ldatum_exists) ? true : false;
+// 		else
+// 			leaveOnLeft = (sv->spl_rdatum_exists) ? true : false;
+// 	}
 
-	if (leaveOnLeft == false)
-	{
-		/*
-		 * swap left and right
-		 */
-		OffsetNumber *off,
-					noff;
-		Datum		datum;
+// 	if (leaveOnLeft == false)
+// 	{
+// 		/*
+// 		 * swap left and right
+// 		 */
+// 		OffsetNumber *off,
+// 					noff;
+// 		Datum		datum;
 
-		SWAPVAR(sv->spl_left, sv->spl_right, off);
-		SWAPVAR(sv->spl_nleft, sv->spl_nright, noff);
-		SWAPVAR(sv->spl_ldatum, sv->spl_rdatum, datum);
-		gistentryinit(entrySL, sv->spl_ldatum, r, NULL, 0, false);
-		gistentryinit(entrySR, sv->spl_rdatum, r, NULL, 0, false);
-	}
+// 		SWAPVAR(sv->spl_left, sv->spl_right, off);
+// 		SWAPVAR(sv->spl_nleft, sv->spl_nright, noff);
+// 		SWAPVAR(sv->spl_ldatum, sv->spl_rdatum, datum);
+// 		gistentryinit(entrySL, sv->spl_ldatum, r, NULL, 0, false);
+// 		gistentryinit(entrySR, sv->spl_rdatum, r, NULL, 0, false);
+// 	}
 
-	if (sv->spl_ldatum_exists)
-		gistMakeUnionKey(giststate, attno, &entryL, false, &entrySL, false,
-						 &sv->spl_ldatum, &tmpBool);
+// 	if (sv->spl_ldatum_exists)
+// 		gistMakeUnionKey(giststate, attno, &entryL, false, &entrySL, false,
+// 						 &sv->spl_ldatum, &tmpBool);
 
-	if (sv->spl_rdatum_exists)
-		gistMakeUnionKey(giststate, attno, &entryR, false, &entrySR, false,
-						 &sv->spl_rdatum, &tmpBool);
+// 	if (sv->spl_rdatum_exists)
+// 		gistMakeUnionKey(giststate, attno, &entryR, false, &entrySR, false,
+// 						 &sv->spl_rdatum, &tmpBool);
 
-	sv->spl_ldatum_exists = sv->spl_rdatum_exists = false;
-}
+// 	sv->spl_ldatum_exists = sv->spl_rdatum_exists = false;
+// }
 
 /*
  * Trivial picksplit implementation. Function called only
@@ -518,6 +518,7 @@ gistUserPicksplit(Relation r, GistEntryVector *entryvec, int attno, GistSplitVec
 		/*
 		 * User-defined picksplit failed to create an actual split, ie it put
 		 * everything on the same side.  Complain but cope.
+		 * WELL, TECHNICALLY we could have one or two quadrants have 0 but the other quadrants have > 0
 		 */
 		ereport(DEBUG1,
 				(errcode(ERRCODE_INTERNAL_ERROR),
@@ -557,14 +558,19 @@ gistUserPicksplit(Relation r, GistEntryVector *entryvec, int attno, GistSplitVec
 
 	/* Clean up if PickSplit didn't take care of a secondary split */
 	if (sv->spl_NWdatum_exists || sv->spl_NEdatum_exists || sv->spl_SWdatum_exists || sv->spl_SEdatum_exists)
-		supportSecondarySplit(r, giststate, attno, sv,
-							  v->spl_NWattr[attno], v->spl_NEattr[attno], v->spl_SWattr[attno], v->spl_SEattr[attno]);
+		elog(LOG, "[gistUserPicksplit] function trying to call supportSecondarySplit");
+		// supportSecondarySplit(r, giststate, attno, sv,
+		// 					  v->spl_NWattr[attno], v->spl_NEattr[attno], v->spl_SWattr[attno], v->spl_SEattr[attno]);
 
 	/* emit union datums computed by PickSplit back to v arrays */
-	v->spl_lattr[attno] = sv->spl_ldatum;
-	v->spl_rattr[attno] = sv->spl_rdatum;
-	v->spl_lisnull[attno] = false;
-	v->spl_risnull[attno] = false;
+	v->spl_NWattr[attno] = sv->spl_NWdatum;
+	v->spl_NEattr[attno] = sv->spl_NEdatum;
+	v->spl_SWattr[attno] = sv->spl_SWdatum;
+	v->spl_SEattr[attno] = sv->spl_SEdatum;
+	v->spl_NWisnull[attno] = false;
+	v->spl_NEisnull[attno] = false;
+	v->spl_SWisnull[attno] = false;
+	v->spl_SEisnull[attno] = false;
 
 	/*
 	 * If index columns remain, then consider whether we can improve the split
@@ -572,95 +578,95 @@ gistUserPicksplit(Relation r, GistEntryVector *entryvec, int attno, GistSplitVec
 	 */
 	v->spl_dontcare = NULL;
 
-	if (attno + 1 < giststate->tupdesc->natts)
-	{
-		int			NumDontCare;
+	// if (attno + 1 < giststate->tupdesc->natts)
+	// {
+	// 	int			NumDontCare;
 
-		/*
-		 * Make a quick check to see if left and right union keys are equal;
-		 * if so, the split is certainly degenerate, so tell caller to
-		 * re-split with the next column.
-		 */
-		if (gistKeyIsEQ(giststate, attno, sv->spl_ldatum, sv->spl_rdatum))
-			return true;
+	// 	/*
+	// 	 * Make a quick check to see if left and right union keys are equal;
+	// 	 * if so, the split is certainly degenerate, so tell caller to
+	// 	 * re-split with the next column.
+	// 	 */
+	// 	if (gistKeyIsEQ(giststate, attno, sv->spl_ldatum, sv->spl_rdatum))
+	// 		return true;
 
-		/*
-		 * Locate don't-care tuples, if any.  If there are none, the split is
-		 * optimal, so just fall out and return false.
-		 */
-		v->spl_dontcare = (bool *) palloc0(sizeof(bool) * (entryvec->n + 1));
+	// 	/*
+	// 	 * Locate don't-care tuples, if any.  If there are none, the split is
+	// 	 * optimal, so just fall out and return false.
+	// 	 */
+	// 	v->spl_dontcare = (bool *) palloc0(sizeof(bool) * (entryvec->n + 1));
 
-		NumDontCare = findDontCares(r, giststate, entryvec->vector, v, attno);
+	// 	NumDontCare = findDontCares(r, giststate, entryvec->vector, v, attno);
 
-		if (NumDontCare > 0)
-		{
-			/*
-			 * Remove don't-cares from spl_left[] and spl_right[].
-			 */
-			removeDontCares(sv->spl_left, &sv->spl_nleft, v->spl_dontcare);
-			removeDontCares(sv->spl_right, &sv->spl_nright, v->spl_dontcare);
+	// 	if (NumDontCare > 0)
+	// 	{
+	// 		/*
+	// 		 * Remove don't-cares from spl_left[] and spl_right[].
+	// 		 */
+	// 		removeDontCares(sv->spl_left, &sv->spl_nleft, v->spl_dontcare);
+	// 		removeDontCares(sv->spl_right, &sv->spl_nright, v->spl_dontcare);
 
-			/*
-			 * If all tuples on either side were don't-cares, the split is
-			 * degenerate, and we're best off to ignore it and split on the
-			 * next column.  (We used to try to press on with a secondary
-			 * split by forcing a random tuple on each side to be treated as
-			 * non-don't-care, but it seems unlikely that that technique
-			 * really gives a better result.  Note that we don't want to try a
-			 * secondary split with empty left or right primary split sides,
-			 * because then there is no union key on that side for the
-			 * PickSplit function to try to expand, so it can have no good
-			 * figure of merit for what it's doing.  Also note that this check
-			 * ensures we can't produce a bogus one-side-only split in the
-			 * NumDontCare == 1 special case below.)
-			 */
-			if (sv->spl_nleft == 0 || sv->spl_nright == 0)
-			{
-				v->spl_dontcare = NULL;
-				return true;
-			}
+	// 		/*
+	// 		 * If all tuples on either side were don't-cares, the split is
+	// 		 * degenerate, and we're best off to ignore it and split on the
+	// 		 * next column.  (We used to try to press on with a secondary
+	// 		 * split by forcing a random tuple on each side to be treated as
+	// 		 * non-don't-care, but it seems unlikely that that technique
+	// 		 * really gives a better result.  Note that we don't want to try a
+	// 		 * secondary split with empty left or right primary split sides,
+	// 		 * because then there is no union key on that side for the
+	// 		 * PickSplit function to try to expand, so it can have no good
+	// 		 * figure of merit for what it's doing.  Also note that this check
+	// 		 * ensures we can't produce a bogus one-side-only split in the
+	// 		 * NumDontCare == 1 special case below.)
+	// 		 */
+	// 		if (sv->spl_nleft == 0 || sv->spl_nright == 0)
+	// 		{
+	// 			v->spl_dontcare = NULL;
+	// 			return true;
+	// 		}
 
-			/*
-			 * Recompute union keys, considering only non-don't-care tuples.
-			 * NOTE: this will set union keys for remaining index columns,
-			 * which will cause later calls of gistUserPicksplit to pass those
-			 * values down to user-defined PickSplit methods with
-			 * spl_ldatum_exists/spl_rdatum_exists set true.
-			 */
-			gistunionsubkey(giststate, itup, v);
+	// 		/*
+	// 		 * Recompute union keys, considering only non-don't-care tuples.
+	// 		 * NOTE: this will set union keys for remaining index columns,
+	// 		 * which will cause later calls of gistUserPicksplit to pass those
+	// 		 * values down to user-defined PickSplit methods with
+	// 		 * spl_ldatum_exists/spl_rdatum_exists set true.
+	// 		 */
+	// 		gistunionsubkey(giststate, itup, v);
 
-			if (NumDontCare == 1)
-			{
-				/*
-				 * If there's only one don't-care tuple then we can't do a
-				 * PickSplit on it, so just choose whether to send it left or
-				 * right by comparing penalties.  We needed the
-				 * gistunionsubkey step anyway so that we have appropriate
-				 * union keys for figuring the penalties.
-				 */
-				OffsetNumber toMove;
+	// 		if (NumDontCare == 1)
+	// 		{
+	// 			/*
+	// 			 * If there's only one don't-care tuple then we can't do a
+	// 			 * PickSplit on it, so just choose whether to send it left or
+	// 			 * right by comparing penalties.  We needed the
+	// 			 * gistunionsubkey step anyway so that we have appropriate
+	// 			 * union keys for figuring the penalties.
+	// 			 */
+	// 			OffsetNumber toMove;
 
-				/* find it ... */
-				for (toMove = FirstOffsetNumber; toMove < entryvec->n; toMove++)
-				{
-					if (v->spl_dontcare[toMove])
-						break;
-				}
-				Assert(toMove < entryvec->n);
+	// 			/* find it ... */
+	// 			for (toMove = FirstOffsetNumber; toMove < entryvec->n; toMove++)
+	// 			{
+	// 				if (v->spl_dontcare[toMove])
+	// 					break;
+	// 			}
+	// 			Assert(toMove < entryvec->n);
 
-				/* ... and assign it to cheaper side */
-				placeOne(r, giststate, v, itup[toMove - 1], toMove, attno + 1);
+	// 			/* ... and assign it to cheaper side */
+	// 			placeOne(r, giststate, v, itup[toMove - 1], toMove, attno + 1);
 
-				/*
-				 * At this point the union keys are wrong, but we don't care
-				 * because we're done splitting.  The outermost recursion
-				 * level of gistSplitByKey will fix things before returning.
-				 */
-			}
-			else
-				return true;
-		}
-	}
+	// 			/*
+	// 			 * At this point the union keys are wrong, but we don't care
+	// 			 * because we're done splitting.  The outermost recursion
+	// 			 * level of gistSplitByKey will fix things before returning.
+	// 			 */
+	// 		}
+	// 		else
+	// 			return true;
+	// 	}
+	// }
 
 	return false;
 }
@@ -851,19 +857,31 @@ gistSplitByKey(Relation r, Page page, IndexTuple *itup, int len,
 				 * call will overwrite that with its own result.
 				 */
 				backupSplit = v->splitVector;
-				backupSplit.spl_left = (OffsetNumber *) palloc(sizeof(OffsetNumber) * len);
-				memcpy(backupSplit.spl_left, v->splitVector.spl_left, sizeof(OffsetNumber) * v->splitVector.spl_nleft);
-				backupSplit.spl_right = (OffsetNumber *) palloc(sizeof(OffsetNumber) * len);
-				memcpy(backupSplit.spl_right, v->splitVector.spl_right, sizeof(OffsetNumber) * v->splitVector.spl_nright);
+				backupSplit.spl_NW = (OffsetNumber *) palloc(sizeof(OffsetNumber) * len);
+				memcpy(backupSplit.spl_NW, v->splitVector.spl_NW, sizeof(OffsetNumber) * v->splitVector.spl_nNW);
+				backupSplit.spl_NE = (OffsetNumber *) palloc(sizeof(OffsetNumber) * len);
+				memcpy(backupSplit.spl_NE, v->splitVector.spl_NE, sizeof(OffsetNumber) * v->splitVector.spl_nNE);
+				backupSplit.spl_SW = (OffsetNumber *) palloc(sizeof(OffsetNumber) * len);
+				memcpy(backupSplit.spl_SW, v->splitVector.spl_SW, sizeof(OffsetNumber) * v->splitVector.spl_nSW);
+				backupSplit.spl_SE = (OffsetNumber *) palloc(sizeof(OffsetNumber) * len);
+				memcpy(backupSplit.spl_SE, v->splitVector.spl_SE, sizeof(OffsetNumber) * v->splitVector.spl_nSE);
 
 				/* Recursively decide how to split the don't-care tuples */
 				gistSplitByKey(r, page, newitup, newlen, giststate, v, attno + 1);
 
 				/* Merge result of subsplit with non-don't-care tuples */
-				for (i = 0; i < v->splitVector.spl_nleft; i++)
-					backupSplit.spl_left[backupSplit.spl_nleft++] = map[v->splitVector.spl_left[i] - 1];
-				for (i = 0; i < v->splitVector.spl_nright; i++)
-					backupSplit.spl_right[backupSplit.spl_nright++] = map[v->splitVector.spl_right[i] - 1];
+				// for (i = 0; i < v->splitVector.spl_nleft; i++)
+				// 	backupSplit.spl_left[backupSplit.spl_nleft++] = map[v->splitVector.spl_left[i] - 1];
+				// for (i = 0; i < v->splitVector.spl_nright; i++)
+				// 	backupSplit.spl_right[backupSplit.spl_nright++] = map[v->splitVector.spl_right[i] - 1];
+				for (i = 0; i < v->splitVector.spl_nNW; i++)
+					backupSplit.spl_NW[backupSplit.spl_nNW++] = map[v->splitVector.spl_NW[i] - 1];
+				for (i = 0; i < v->splitVector.spl_nNE; i++)
+					backupSplit.spl_NE[backupSplit.spl_nNE++] = map[v->splitVector.spl_NE[i] - 1];
+				for (i = 0; i < v->splitVector.spl_nSW; i++) 
+					backupSplit.spl_SW[backupSplit.spl_nSW++] = map[v->splitVector.spl_SW[i] - 1];
+				for (i = 0; i < v->splitVector.spl_nSE; i++)
+					backupSplit.spl_SE[backupSplit.spl_nSE++] = map[v->splitVector.spl_SE[i] - 1];
 
 				v->splitVector = backupSplit;
 			}
