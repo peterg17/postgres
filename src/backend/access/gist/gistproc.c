@@ -534,6 +534,8 @@ gist_box_picksplit(PG_FUNCTION_ARGS)
 			adjustBox(&context.boundingBox, box);
 	}
 
+	elog(LOG, "In GiST loose quadtree picksplit function!\n");
+
 	/* Allocate bounding boxes of left and right groups */
 	NWBox = palloc0(sizeof(BOX));
 	NEBox = palloc0(sizeof(BOX));
