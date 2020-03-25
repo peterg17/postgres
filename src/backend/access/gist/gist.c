@@ -1359,8 +1359,10 @@ gistSplit(Relation r,
 		  int len,
 		  GISTSTATE *giststate)
 {
-	IndexTuple *lvectup,
-			   *rvectup;
+	IndexTuple *NWvectup,
+			   *NEvectup,
+			   *SWvectup,
+			   *SEvectup;
 	GistSplitVector v;
 	int			i;
 	SplitedPageLayout *res = NULL;
@@ -1382,39 +1384,53 @@ gistSplit(Relation r,
 						IndexTupleSize(itup[0]), GiSTPageSize,
 						RelationGetRelationName(r))));
 
-	memset(v.spl_lisnull, true, sizeof(bool) * giststate->tupdesc->natts);
-	memset(v.spl_risnull, true, sizeof(bool) * giststate->tupdesc->natts);
+	memset(v.spl_NWisnull, true, sizeof(bool) * giststate->tupdesc->natts);
+	memset(v.spl_NEisnull, true, sizeof(bool) * giststate->tupdesc->natts);
+	memset(v.spl_SWisnull, true, sizeof(bool) * giststate->tupdesc->natts);
+	memset(v.spl_SEisnull, true, sizeof(bool) * giststate->tupdesc->natts);
 	gistSplitByKey(r, page, itup, len, giststate, &v, 0);
 
-	/* form left and right vector */
-	lvectup = (IndexTuple *) palloc(sizeof(IndexTuple) * (len + 1));
-	rvectup = (IndexTuple *) palloc(sizeof(IndexTuple) * (len + 1));
+	/* form quadrant vectors */
+	NWvectup = (IndexTuple *) palloc(sizeof(IndexTuple) * (len + 1));
+	NEvectup = (IndexTuple *) palloc(sizeof(IndexTuple) * (len + 1));
+	SWvectup = (IndexTuple *) palloc(sizeof(IndexTuple) * (len + 1));
+	SEvectup = (IndexTuple *) palloc(sizeof(IndexTuple) * (len + 1)); 
 
-	for (i = 0; i < v.splitVector.spl_nleft; i++)
-		lvectup[i] = itup[v.splitVector.spl_left[i] - 1];
+	// for (i = 0; i < v.splitVector.spl_nright; i++)
+	// 	rvectup[i] = itup[v.splitVector.spl_right[i] - 1];
 
-	for (i = 0; i < v.splitVector.spl_nright; i++)
-		rvectup[i] = itup[v.splitVector.spl_right[i] - 1];
+	// where does itup get initialized??
+	for (i = 0; i < v.splitVector.spl_nNW; i++) 
+		NWvectup[i] = itup[v.splitVector.spl_NW[i] - 1];
+
+	for (i = 0; i < v.splitVector.spl_nNE; i++)
+		NEvectup[i] = itup[v.splitVector.spl_NE[i] - 1];
+
+	for (i = 0; i < v.splitVector.spl_nSW; i++)
+		SWvectup[i] = itup[v.splitVector.spl_SW[i] - 1];
+	
+	for (i = 0; i < v.splitVector.spl_nSE; i++)
+		SEvectup[i] = itup[v.splitVector.spl_SE[i] - 1];
 
 	/* finalize splitting (may need another split) */
-	if (!gistfitpage(rvectup, v.splitVector.spl_nright))
+	if (!gistfitpage(NWvectup, v.splitVector.spl_nNW))
 	{
-		res = gistSplit(r, page, rvectup, v.splitVector.spl_nright, giststate);
-	}
+		res = gistSplit(r, page, NWvectup, v.splitVector.spl_nNW, giststate);
+	} 
 	else
 	{
 		ROTATEDIST(res);
-		res->block.num = v.splitVector.spl_nright;
-		res->list = gistfillitupvec(rvectup, v.splitVector.spl_nright, &(res->lenlist));
-		res->itup = gistFormTuple(giststate, r, v.spl_rattr, v.spl_risnull, false);
+		res->block.num = v.splitVector.spl_nNW;
+		res->list = gistfillitupvec(NWvectup, v.splitVector.spl_nNW, &(res->lenlist));
+		res->itup = gistFormTuple(giststate, r, v.spl_NWattr, v.spl_NWisnull, false);
 	}
 
-	if (!gistfitpage(lvectup, v.splitVector.spl_nleft))
+	if (!gistfitpage(NEvectup, v.splitVector.spl_nNE))
 	{
 		SplitedPageLayout *resptr,
 				   *subres;
 
-		resptr = subres = gistSplit(r, page, lvectup, v.splitVector.spl_nleft, giststate);
+		resptr = subres = gistSplit(r, page, NEvectup, v.splitVector.spl_nNE, giststate);
 
 		/* install on list's tail */
 		while (resptr->next)
@@ -1426,9 +1442,52 @@ gistSplit(Relation r,
 	else
 	{
 		ROTATEDIST(res);
-		res->block.num = v.splitVector.spl_nleft;
-		res->list = gistfillitupvec(lvectup, v.splitVector.spl_nleft, &(res->lenlist));
-		res->itup = gistFormTuple(giststate, r, v.spl_lattr, v.spl_lisnull, false);
+		res->block.num = v.splitVector.spl_nNE;
+		res->list = gistfillitupvec(NEvectup, v.splitVector.spl_nNE, &(res->lenlist));
+		res->itup = gistFormTuple(giststate, r, v.spl_NEattr, v.spl_NEisnull, false);
+	}
+
+	if (!gistfitpage(SWvectup, v.splitVector.spl_nSW))
+	{
+		SplitedPageLayout *resptr,
+						*subres;
+		resptr = subres = gistSplit(r, page, SWvectup, v.splitVector.spl_nSW, giststate);
+
+		/* install on list's tail */
+		// Does this make sense given we are doing this for each quadrant??
+		while (resptr->next)
+			resptr = resptr->next;
+		
+		resptr->next = res;
+		res = subres;
+	}
+	else 
+	{
+		ROTATEDIST(res);
+		res->block.num = v.splitVector.spl_nSW;
+		res->list = gistfillitupvec(SWvectup, v.splitVector.spl_nSW, &(res->lenlist));
+		res->itup = gistFormTuple(giststate, r, v.spl_SWattr, v.spl_SWisnull, false);
+	}
+
+	if (!gistfitpage(SEvectup, v.splitVector.spl_nSE))
+	{
+		SplitedPageLayout *resptr,
+					*subres;
+		resptr = subres = gistSplit(r, page, SEvectup, v.splitVector.spl_nSE, giststate);
+
+		/* install on list's tail */
+		while (resptr->next)
+			resptr = resptr->next;
+
+		resptr->next = res;
+		res = subres;
+	}
+	else
+	{
+		ROTATEDIST(res);
+		res->block.num = v.splitVector.spl_nSE;
+		res->list = gistfillitupvec(SEvectup, v.splitVector.spl_nSE, &(res->lenlist));
+		res->itup = gistFormTuple(giststate, r, v.spl_SEattr, v.spl_SEisnull, false);
 	}
 
 	return res;

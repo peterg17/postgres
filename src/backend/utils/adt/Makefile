@@ -18,15 +18,15 @@ OBJS = acl.o amutils.o arrayfuncs.o array_expanded.o array_selfuncs.o \
 	geo_ops.o geo_selfuncs.o geo_spgist.o inet_cidr_ntop.o inet_net_pton.o \
 	int.o int8.o json.o jsonb.o jsonb_gin.o jsonb_op.o jsonb_util.o \
 	jsonfuncs.o like.o lockfuncs.o mac.o mac8.o misc.o nabstime.o name.o \
-	network.o network_gist.o network_selfuncs.o network_spgist.o \
+	network.o network_selfuncs.o network_spgist.o \
 	numeric.o numutils.o oid.o oracle_compat.o \
 	orderedsetaggs.o pg_locale.o pg_lsn.o pg_upgrade_support.o \
 	pgstatfuncs.o \
-	pseudotypes.o quote.o rangetypes.o rangetypes_gist.o \
+	pseudotypes.o quote.o rangetypes.o \
 	rangetypes_selfuncs.o rangetypes_spgist.o rangetypes_typanalyze.o \
 	regexp.o regproc.o ri_triggers.o rowtypes.o ruleutils.o \
 	selfuncs.o tid.o timestamp.o trigfuncs.o \
-	tsginidx.o tsgistidx.o tsquery.o tsquery_cleanup.o tsquery_gist.o \
+	tsginidx.o tsquery.o tsquery_cleanup.o \
 	tsquery_op.o tsquery_rewrite.o tsquery_util.o tsrank.o \
 	tsvector.o tsvector_op.o tsvector_parser.o \
 	txid.o uuid.o varbit.o varchar.o varlena.o version.o \

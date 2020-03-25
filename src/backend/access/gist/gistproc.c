@@ -594,7 +594,7 @@ gist_box_picksplit(PG_FUNCTION_ARGS)
 				// place in NW quadrant
 				v->spl_NW[v->spl_nNW] = i;
 				v->spl_nNW++;
-				adjust(NWBox, box);
+				adjustBox(NWBox, box);
 			}
 		} else {
 			// entry is eitehr in SW or SE quadrant
